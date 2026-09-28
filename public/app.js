@@ -2,9 +2,8 @@ const CATS = ['typography', 'spacing', 'alignment', 'color', 'readability', 'hie
 const $ = (s) => document.querySelector(s), app = $('#app');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const store = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
-const S = { file: null, src: null, pdf: false, result: null, demo: false, sel: null, teach: {}, err: '', busy: false, q: 0, pick: null, stage: 0, fixBusy: false, fixResult: null, fixIssue: null };
+const S = { file: null, src: null, pdf: false, result: null, demo: false, sel: null, err: '', busy: false, q: 0, pick: null, stage: 0 };
 const TYPES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'], MB = 1048576;
-const catLesson = (c) => KB.lessons.find((l) => l.id === (c === 'grammar' ? 'readability' : c)) || KB.lessons[0];
 
 /* ---------- demo ---------- */
 const DEMO_SVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 800'><rect width='600' height='800' fill='#f4efe6'/><text x='60' y='300' font-size='84' font-weight='800' font-family='Arial' fill='#1f2a44'>SUMMER</text><text x='60' y='390' font-size='84' font-weight='800' font-family='Arial' fill='#1f2a44'>SALE</text><text x='60' y='450' font-size='26' font-family='Arial' fill='#e2d79c'>Up to 50% off everything in store</text><rect x='270' y='620' width='240' height='60' rx='8' fill='#c9b458'/><text x='300' y='658' font-size='22' font-family='Arial' fill='#fff'>Shop now</text><text x='60' y='775' font-size='11' font-family='Arial' fill='#999'>Terms and conditions apply. Offer valid while stocks lasts.</text></svg>";
@@ -17,7 +16,17 @@ const DEMO = {
   recommendations: ['Darken the subtitle so it is readable.', 'Align the button to the left edge shared by the text.', 'Make the button higher-contrast.', 'Fix the footer grammar.'],
   learning_topics: ['Contrast', 'Alignment', 'Visual Hierarchy'],
   accessibility: { contrast_issues: ['Subtitle text has very low contrast against background'], font_size_issues: ['Footer text is very small'], color_blindness_risk: 'low', overall_rating: 'C' },
-  design_suggestions: { color_palette: ['#1f2a44', '#f4efe6', '#c9b458'], layout_tip: 'Align all left edges to a single vertical line for a cleaner look.' }
+  design_suggestions: { color_palette: ['#1f2a44', '#f4efe6', '#c9b458'], layout_tip: 'Align all left edges to a single vertical line for a cleaner look.' },
+  title_text: 'SUMMER SALE',
+  grammar_report: {
+    spelling_grammar: ['"while stocks lasts" should be "while stocks last" (subject–verb agreement).'],
+    punctuation: ['The terms line ends without a full stop.'],
+    voice_tone: { detected: 'Promotional & urgent', feedback: 'Energetic sale tone fits a poster. Keep sentences short and end with a clear stop.' }
+  },
+  typography_errors: [
+    { error: 'Footer text too small', detail: 'The terms line is set at ~11px — too small to read at poster size.', fix: 'Use at least 14–16px for supporting text.' },
+    { error: 'Weak size hierarchy', detail: 'Subtitle and button text sizes are too close to each other.', fix: 'Use a clear size scale, e.g. 84 / 32 / 18 px.' }
+  ]
 };
 
 /* ---------- helpers ---------- */
@@ -30,6 +39,17 @@ async function shrink(src, max, q) { const i = await loadImg(src), k = Math.min(
 const go = (h) => { location.hash = h; };
 const scoreColor = (s) => s >= 75 ? 'var(--ok)' : s >= 50 ? 'var(--imp)' : 'var(--crit)';
 const scoreLabel = (s) => s >= 85 ? 'Excellent' : s >= 70 ? 'Good' : s >= 50 ? 'Fair' : s >= 30 ? 'Needs Work' : 'Poor';
+
+/* ---------- title text variations ---------- */
+const titleVars = (t) => {
+  const small = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'nor', 'of', 'in', 'on', 'at', 'to', 'for', 'up', 'via', 'per', 'vs', 'with', 'from', 'into', 'over', 'after', 'before']);
+  const sentence = t.toLowerCase().replace(/(^\s*\w|[.!?]\s+\w)/g, (m) => m.toUpperCase());
+  const title = t.toLowerCase().replace(/\S+/g, (w, i) => {
+    const bare = w.replace(/[^a-z']/g, '');
+    return (i > 0 && small.has(bare)) ? w : (w ? w[0].toUpperCase() + w.slice(1) : w);
+  });
+  return { upper: t.toUpperCase(), sentence, title };
+};
 
 /* ---------- paste support ---------- */
 async function handlePaste(e) {
@@ -74,7 +94,7 @@ async function analyze() {
     const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify({ image: S.src }) });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(j.error || 'Something went wrong while analyzing your design. Please try again.');
-    S.result = j; S.demo = false; S.sel = null; S.teach = {};
+    S.result = j; S.demo = false; S.sel = null;
     if (settings().save) saveHistory();
     S.busy = false; clearInterval(timer); go('analysis'); render();
   } catch (e) {
@@ -86,64 +106,6 @@ async function saveHistory() {
   const thumb = S.pdf ? '' : await shrink(S.src, 320, 0.6), n = issues(S.result).length;
   const h = [{ id: Date.now(), name: S.file?.name || 'Design', date: new Date().toISOString(), score: S.result.overall.score, count: n, thumb, result: S.result }, ...hist()].slice(0, 30);
   while (h.length && !store.set('dc_history', h)) h.pop();
-}
-
-/* ---------- fix functionality ---------- */
-async function fixIssue(issueIdx) {
-  if (!S.result || !S.src) return;
-  const is = issues(S.result);
-  const issue = is[issueIdx];
-  if (!issue) return;
-
-  S.fixBusy = true; S.fixResult = null; S.fixIssue = issueIdx; render();
-
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 120000);
-
-  try {
-    const res = await fetch('/api/fix-design', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: ctrl.signal,
-      body: JSON.stringify({ image: S.src, issues: [issue], fixAll: false })
-    });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(j.error || 'Could not generate fix instructions.');
-    S.fixResult = j; S.fixBusy = false;
-  } catch (e) {
-    S.fixResult = { error: e.name === 'AbortError' ? 'Request timed out. Try again.' : e.message };
-    S.fixBusy = false;
-  } finally { clearTimeout(to); render(); }
-}
-
-async function fixAllIssues() {
-  if (!S.result || !S.src) return;
-  const is = issues(S.result);
-  if (!is.length) return;
-
-  S.fixBusy = true; S.fixResult = null; S.fixIssue = 'all'; render();
-
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 120000);
-
-  try {
-    const res = await fetch('/api/fix-design', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: ctrl.signal,
-      body: JSON.stringify({ image: S.src, issues: is, fixAll: true })
-    });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(j.error || 'Could not generate fix instructions.');
-    S.fixResult = j; S.fixBusy = false;
-  } catch (e) {
-    S.fixResult = { error: e.name === 'AbortError' ? 'Request timed out. Try again.' : e.message };
-    S.fixBusy = false;
-  } finally { clearTimeout(to); render(); }
-}
-
-function closeFix() {
-  S.fixResult = null; S.fixIssue = null; render();
 }
 
 /* ---------- export helpers ---------- */
@@ -164,8 +126,27 @@ function generateShareText(r) {
   is.forEach((i, idx) => { txt += `  ${idx + 1}. [${i.severity.toUpperCase()}] ${i.title}\n     ${i.description}\n     Fix: ${i.how_to_improve}\n\n`; });
   txt += `STRENGTHS:\n`;
   (r.strengths || []).forEach(s => { txt += `  + ${s}\n`; });
-  txt += `\nRECOMMENDATIONS:\n`;
-  (r.recommendations || []).forEach((s, i) => { txt += `  ${i + 1}. ${s}\n`; });
+  txt += `\nCHANGES REQUIRED:\n`;
+  (r.recommendations || []).forEach((s) => { txt += `  • ${s}\n`; });
+  const tv = r.title_text ? titleVars(r.title_text) : null;
+  if (tv) {
+    txt += `\nTITLE TEXT VARIATIONS:\n`;
+    txt += `  Original: ${r.title_text}\n`;
+    txt += `  UPPER CASE: ${tv.upper}\n`;
+    txt += `  Sentence case: ${tv.sentence}\n`;
+    txt += `  Title Case: ${tv.title}\n`;
+  }
+  const g = r.grammar_report;
+  if (g && ((g.spelling_grammar || []).length || (g.punctuation || []).length || g.voice_tone?.detected || g.voice_tone?.feedback)) {
+    txt += `\nGRAMMAR & TONE:\n`;
+    (g.spelling_grammar || []).forEach((s) => { txt += `  • [Grammar] ${s}\n`; });
+    (g.punctuation || []).forEach((s) => { txt += `  • [Punctuation] ${s}\n`; });
+    if (g.voice_tone?.detected || g.voice_tone?.feedback) txt += `  Voice & Tone: ${g.voice_tone?.detected || ''} — ${g.voice_tone?.feedback || ''}\n`;
+  }
+  if (r.typography_errors?.length) {
+    txt += `\nTYPOGRAPHY ERRORS:\n`;
+    r.typography_errors.forEach((t, i) => { txt += `  ${i + 1}. ${t.error}${t.detail ? ` — ${t.detail}` : ''}\n     Fix: ${t.fix}\n`; });
+  }
   if (r.design_suggestions?.color_palette?.length) txt += `\nSuggested Colors: ${r.design_suggestions.color_palette.join(', ')}\n`;
   if (r.design_suggestions?.layout_tip) txt += `Layout Tip: ${r.design_suggestions.layout_tip}\n`;
   return txt;
@@ -199,7 +180,7 @@ function analysis() {
   const r = S.result; if (!r) return `<p class="hero">No analysis yet. <a href="#home">Analyze a design</a>.</p>`;
   const is = issues(r);
   const marks = is.filter((i) => i.location).map((i) => { const l = i.location; return `<div class="box ${i.severity}" style="left:${l.x}%;top:${l.y}%;width:${l.width}%;height:${l.height}%;${S.sel === i.n ? '' : 'opacity:.35'}"></div><button class="mk ${i.severity}" style="left:${l.x}%;top:${l.y}%" data-act="sel" data-n="${i.n}" aria-label="Issue ${i.n}: ${esc(i.title)}">${i.n}</button>`; }).join('');
-  const cards = is.map((i, idx) => { const L = catLesson(i.cat), t = S.teach[i.n]; return `<div class="card issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}"><button style="all:unset;cursor:pointer;display:block;width:100%" data-act="sel" data-n="${i.n}"><span class="tag">${i.severity} · ${i.cat}${i.location ? '' : ' · no marker'}</span><h3>${i.n}. ${esc(i.title)}</h3></button><p style="margin:.3em 0">${esc(i.description)}</p><p class="small"><b>Why it matters:</b> ${esc(i.why_it_matters)}</p><p class="small"><b>How to improve:</b> ${esc(i.how_to_improve)}</p><p class="small mut">💡 ${esc(i.learning_tip)}</p><div class="issue-actions"><button data-act="teach" data-n="${i.n}" aria-expanded="${!!t}">📚 Teach Me</button><button class="fix-btn" data-act="fix-one" data-idx="${idx}">🔧 Fix It</button></div>${t ? `<div class="teach"><h3>${L.title}</h3><p class="small"><b>What is the principle?</b> ${esc(L.what)}</p><p class="small"><b>Why does it matter?</b> ${esc(L.why)}</p><p class="small"><b>How can I recognize it?</b> ${esc(L.spot)}</p><p class="small"><b>Quick tip:</b> ${esc(L.tip)}</p></div>` : ''}</div>`; }).join('');
+  const cards = is.map((i) => `<div class="card issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}"><button style="all:unset;cursor:pointer;display:block;width:100%" data-act="sel" data-n="${i.n}"><span class="tag">${i.severity} · ${i.cat}${i.location ? '' : ' · no marker'}</span><h3>${i.n}. ${esc(i.title)}</h3></button><p style="margin:.3em 0">${esc(i.description)}</p><p class="small"><b>Why it matters:</b> ${esc(i.why_it_matters)}</p><p class="small"><b>How to improve:</b> ${esc(i.how_to_improve)}</p><p class="small mut">💡 ${esc(i.learning_tip)}</p></div>`).join('');
 
   const typeBadge = r.design_type ? `<span class="badge">${esc(r.design_type)}</span> ${r.design_type_reason ? `<span class="mut small"> · ${esc(r.design_type_reason)}</span>` : ''}` : '';
   const critCount = is.filter(i => i.severity === 'critical').length;
@@ -207,8 +188,27 @@ function analysis() {
   const minCount = is.filter(i => i.severity === 'minor').length;
   const sc = scoreColor(r.overall.score);
 
-  // Summary card
-  const summaryCard = `<div class="card summary-card"><div class="summary-header"><div class="big" style="color:${sc}">${r.overall.score}</div><div><div class="mut small">Overall Score</div><div style="font-weight:600;color:${sc}">${scoreLabel(r.overall.score)}</div></div></div><p style="margin:12px 0 0">${esc(r.overall.summary)}</p>${typeBadge ? `<p style="margin:8px 0 0">${typeBadge}</p>` : ''}<div class="summary-stats"><div class="stat"><b style="color:var(--crit)">${critCount}</b><span class="small mut">Critical</span></div><div class="stat"><b style="color:var(--imp)">${impCount}</b><span class="small mut">Important</span></div><div class="stat"><b style="color:var(--min)">${minCount}</b><span class="small mut">Minor</span></div><div class="stat"><b>${is.length}</b><span class="small mut">Total Issues</span></div></div></div>`;
+  // Summary card — shown at the very top
+  const summaryCard = `<div class="card summary-card"><h2 style="margin:0 0 12px">📋 Summary</h2><p style="margin:0 0 16px;font-size:17px;line-height:1.6">${esc(r.overall.summary)}</p><div class="summary-header"><div class="big" style="color:${sc}">${r.overall.score}</div><div><div class="mut small">Overall Score</div><div style="font-weight:600;color:${sc}">${scoreLabel(r.overall.score)}</div></div></div>${typeBadge ? `<p style="margin:10px 0 0">${typeBadge}</p>` : ''}<div class="summary-stats"><div class="stat"><b style="color:var(--crit)">${critCount}</b><span class="small mut">Critical</span></div><div class="stat"><b style="color:var(--imp)">${impCount}</b><span class="small mut">Important</span></div><div class="stat"><b style="color:var(--min)">${minCount}</b><span class="small mut">Minor</span></div><div class="stat"><b>${is.length}</b><span class="small mut">Total Issues</span></div></div></div>`;
+
+  // Changes Required — as bullet points
+  const changesCard = `<h2>✅ Changes Required</h2><div class="card"><ul class="clean">${(r.recommendations || []).map((s) => `<li class="chg">${esc(s)}</li>`).join('') || '<li class="ok">No changes required — nice work!</li>'}</ul></div>`;
+
+  // Title text variations — UPPER CASE / Sentence case / Title Case
+  const tv = r.title_text ? titleVars(r.title_text) : null;
+  const titleSection = tv ? `<h2>🔤 Title Variations</h2><div class="card"><p class="small mut" style="margin-top:0">Title text in your design: <b style="color:var(--ink)">${esc(r.title_text)}</b> — here are 3 casing options:</p><div class="var-grid"><div class="var-card"><div class="lbl">UPPER CASE</div><div class="txt">${esc(tv.upper)}</div><button data-act="copy-var" data-var="upper">📋 Copy</button></div><div class="var-card"><div class="lbl">Sentence case</div><div class="txt">${esc(tv.sentence)}</div><button data-act="copy-var" data-var="sentence">📋 Copy</button></div><div class="var-card"><div class="lbl">Title Case (main words)</div><div class="txt">${esc(tv.title)}</div><button data-act="copy-var" data-var="title">📋 Copy</button></div></div></div>` : '';
+
+  // Grammar & tone — spelling/grammar, punctuation, voice tone
+  const g = r.grammar_report;
+  const gRows = [];
+  if (g?.spelling_grammar?.length) gRows.push(`<p class="small" style="margin:12px 0 4px"><b>✍️ Spelling & Grammar</b></p><ul class="clean">${g.spelling_grammar.map((x) => `<li class="dng-item">${esc(x)}</li>`).join('')}</ul>`);
+  if (g?.punctuation?.length) gRows.push(`<p class="small" style="margin:12px 0 4px"><b>📌 Punctuation</b></p><ul class="clean">${g.punctuation.map((x) => `<li class="dng-item">${esc(x)}</li>`).join('')}</ul>`);
+  if (g?.voice_tone?.detected || g?.voice_tone?.feedback) gRows.push(`<div class="tone-box"><p class="small" style="margin:0"><b>🎙️ Voice &amp; Tone:</b> ${esc(g.voice_tone?.detected || '')}</p>${g.voice_tone?.feedback ? `<p class="small mut" style="margin:6px 0 0">${esc(g.voice_tone.feedback)}</p>` : ''}</div>`);
+  const grammarSection = gRows.length ? `<h2>📝 Grammar &amp; Tone</h2><div class="card">${gRows.join('')}</div>` : '';
+
+  // Typography errors
+  const typoList = (r.typography_errors || []).filter((t) => t.error || t.detail || t.fix);
+  const typoSection = typoList.length ? `<h2>✒️ Typography Errors</h2><div class="card"><ul class="clean">${typoList.map((t) => `<li class="typo-item"><b>${esc(t.error)}</b>${t.detail ? ` <span class="mut">— ${esc(t.detail)}</span>` : ''}${t.fix ? `<br><span class="small">Fix: ${esc(t.fix)}</span>` : ''}</li>`).join('')}</ul></div>` : '';
 
   // Accessibility section
   const acc = r.accessibility;
@@ -221,21 +221,20 @@ function analysis() {
   return `<div class="dash"><div class="stage"><div class="card" style="text-align:center">${S.demo ? '<p><span class="badge">Demo Analysis</span> <span class="mut small">This is a built-in sample.</span></p>' : ''}<div class="wrap"><img src="${S.src}" alt="The analyzed design with numbered issue markers">${marks}</div>${S.pdf ? '<p class="mut small">Issue markers are not available for PDFs.</p>' : ''}</div></div>
 <div>
 ${summaryCard}
+${changesCard}
+${titleSection}
+${grammarSection}
+${typoSection}
 <h3 style="margin-top:20px">Category Scores</h3><div class="card"><div class="scores">${CATS.map((c) => { const s = r.categories[c].score; return `<div class="sc"><b style="color:${scoreColor(s)}">${s}</b><span class="small mut">${c[0].toUpperCase() + c.slice(1)}</span></div>`; }).join('')}</div><p class="mut small">Scores reflect how closely a design follows specific principles, not artistic talent.</p></div>
 ${accSection}
-<h2>Needs Attention</h2>${is.length ? `<div class="card" style="text-align:center;margin-bottom:16px"><button class="fix-btn fix-all-btn" data-act="fix-all">🔧 Fix All Issues (${is.length})</button><p class="mut small" style="margin:8px 0 0">AI will generate step-by-step fix instructions for all issues</p></div>` : ''}${cards || '<p class="card mut">No issues found. Nice work!</p>'}
+<h2>Needs Attention</h2>${cards || '<p class="card mut">No issues found. Nice work!</p>'}
 <h2>What's Working</h2><div class="card"><ul class="clean">${r.strengths.map((s) => `<li class="ok"><span style="color:var(--ink)">${esc(s)}</span></li>`).join('') || '<li>—</li>'}</ul></div>
-<h2>Recommended Improvements</h2><div class="card"><ol class="clean">${r.recommendations.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></div>
 ${sugSection}
 <h2>Learn</h2><div class="row" style="justify-content:flex-start">${r.learning_topics.map((t) => { const l = KB.lessons.find((x) => x.title.toLowerCase() === t.toLowerCase()); return `<a class="btn" href="#learn${l ? ':' + l.id : ''}">${esc(t)}</a>`; }).join('')}</div>
 <h2>Export & Share</h2><div class="card"><div class="row" style="justify-content:flex-start"><button data-act="export-txt">📄 Download Report</button><button data-act="export-json">📦 Download JSON</button><button data-act="share-analysis">📋 Copy Summary</button></div></div>
 <p class="row" style="justify-content:flex-start;margin-top:24px"><a class="btn pri" href="#home" data-act="new">🔍 Analyze another</a></p></div></div>
 
-${S.fixBusy ? `<div class="fix-modal"><div class="fix-modal-content card"><div class="spin" style="margin:0 auto 12px"></div><h2 style="text-align:center;margin:0">🎨 Generating Fixed Design...</h2><p class="mut" style="text-align:center">AI is fixing your design${S.fixIssue === 'all' ? ' (all issues)' : ''}. This may take 30-60 seconds.</p></div></div>` : ''}
-
-${S.fixResult && S.fixResult.fixed_image ? `<div class="fix-modal"><div class="fix-modal-content card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h2 style="margin:0">✅ Fixed Design</h2><button data-act="close-fix" style="font-size:20px;padding:4px 12px">✕</button></div><div class="before-after"><div class="ba-panel"><h3>❌ Before</h3><div class="ba-img"><img src="${S.src}" alt="Original design"></div></div><div class="ba-panel"><h3>✅ After (Fixed)</h3><div class="ba-img"><img src="${S.fixResult.fixed_image}" alt="Fixed design"></div></div></div>${S.fixResult.description ? `<p class="mut small" style="margin-top:12px;text-align:center">${esc(S.fixResult.description)}</p>` : ''}${S.fixResult.changes_made?.length ? `<div class="card" style="margin-top:12px"><h4 style="margin:0 0 8px">Changes Made:</h4><ul class="clean">${S.fixResult.changes_made.map(c => `<li class="ok">${esc(c)}</li>`).join('')}</ul></div>` : ''}<div class="row" style="margin-top:16px"><button class="pri" data-act="download-fixed">💾 Download Fixed Image</button><button data-act="analyze-fixed">🔍 Analyze Fixed Version</button><button data-act="close-fix">Close</button></div></div></div>` : ''}
-
-${S.fixResult && S.fixResult.error ? `<div class="fix-modal"><div class="fix-modal-content card"><h2 style="color:var(--crit)">❌ Error</h2><p>${esc(S.fixResult.error)}</p><div class="row" style="margin-top:12px"><button data-act="close-fix">Close</button></div></div></div>` : ''}`;
+`;
 }
 
 function learn(id) {
@@ -276,13 +275,12 @@ document.addEventListener('click', (e) => {
   if (a === 'analyze') analyze();
   else if (a === 'remove') { S.file = S.src = null; S.err = ''; render(); }
   else if (a === 'new') { S.file = S.src = null; S.result = null; }
-  else if (a === 'demo') { S.src = 'data:image/svg+xml,' + encodeURIComponent(DEMO_SVG); S.result = DEMO; S.demo = true; S.pdf = false; S.sel = null; S.teach = {}; go('analysis'); }
+  else if (a === 'demo') { S.src = 'data:image/svg+xml,' + encodeURIComponent(DEMO_SVG); S.result = DEMO; S.demo = true; S.pdf = false; S.sel = null; go('analysis'); }
   else if (a === 'sel') { S.sel = n; render(); document.getElementById('i' + n)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth', block: 'center' }); }
-  else if (a === 'teach') { S.teach[n] = !S.teach[n]; render(); }
   else if (a === 'ans') { S.pick = +b.dataset.i; render(); }
   else if (a === 'next') { S.q++; S.pick = null; render(); }
   else if (a === 'restart') { S.q = 0; S.pick = null; render(); }
-  else if (a === 'open') { const x = hist().find((h) => h.id === +b.dataset.id); if (x) { S.result = x.result; S.src = x.thumb; S.pdf = !x.thumb; S.demo = false; S.sel = null; S.teach = {}; go('analysis'); } }
+  else if (a === 'open') { const x = hist().find((h) => h.id === +b.dataset.id); if (x) { S.result = x.result; S.src = x.thumb; S.pdf = !x.thumb; S.demo = false; S.sel = null; go('analysis'); } }
   else if (a === 'del') { if (confirm('Delete this analysis?')) { store.set('dc_history', hist().filter((h) => h.id !== +b.dataset.id)); render(); } }
   else if (a === 'clear') { if (confirm('Delete all saved history?')) { store.set('dc_history', []); render(); } }
   else if (a === 'export-txt') { if (S.result) downloadText('designcoach-report.txt', generateShareText(S.result)); }
@@ -295,48 +293,10 @@ document.addEventListener('click', (e) => {
       }).catch(() => downloadText('designcoach-report.txt', generateShareText(S.result)));
     }
   }
-  else if (a === 'fix-one') { fixIssue(+b.dataset.idx); }
-  else if (a === 'fix-all') { fixAllIssues(); }
-  else if (a === 'close-fix') { closeFix(); }
-  else if (a === 'download-fixed') {
-    if (S.fixResult?.fixed_image) {
-      const a2 = document.createElement('a'); a2.href = S.fixResult.fixed_image;
-      a2.download = 'designcoach-fixed.png'; a2.click();
-    }
-  }
-  else if (a === 'analyze-fixed') {
-    if (S.fixResult?.fixed_image) {
-      S.src = S.fixResult.fixed_image;
-      S.file = { name: 'fixed-design.png', size: 0 };
-      S.fixResult = null; S.fixIssue = null;
-      S.result = null; S.sel = null; S.teach = {};
-      render();
-      analyze();
-    }
-  }
-  else if (a === 'export-fix') {
-    if (S.fixResult && S.fixResult.fixes) {
-      let txt = 'DESIGNCOACH FIX GUIDE\n' + '='.repeat(40) + '\n\n';
-      if (S.fixResult.overall_fix_plan) {
-        txt += 'SUMMARY: ' + (S.fixResult.overall_fix_plan.summary || '') + '\n\n';
-        if (S.fixResult.overall_fix_plan.quick_wins?.length) {
-          txt += 'QUICK WINS:\n';
-          S.fixResult.overall_fix_plan.quick_wins.forEach(w => { txt += '  - ' + w + '\n'; });
-          txt += '\n';
-        }
-      }
-      S.fixResult.fixes.forEach((f, i) => {
-        txt += 'FIX #' + (i+1) + ': ' + (f.issue_title || '') + '\n';
-        txt += 'Difficulty: ' + (f.difficulty || '?') + ' | Time: ' + (f.time_estimate || '?') + '\n\n';
-        txt += 'Steps:\n';
-        (f.steps || []).forEach((s, j) => { txt += '  ' + (j+1) + '. ' + s + '\n'; });
-        if (f.css_changes) txt += '\nCode:\n' + f.css_changes + '\n';
-        if (f.before_description) txt += '\nBefore: ' + f.before_description + '\n';
-        if (f.after_description) txt += 'After: ' + f.after_description + '\n';
-        txt += '\n' + '-'.repeat(40) + '\n\n';
-      });
-      downloadText('designcoach-fix-guide.txt', txt);
-    }
+  else if (a === 'copy-var') {
+    const tv = titleVars(S.result?.title_text || '');
+    const t = tv[b.dataset.var] || '';
+    if (t) navigator.clipboard.writeText(t).then(() => { b.textContent = '✅ Copied!'; setTimeout(() => { b.textContent = '📋 Copy'; }, 1500); }).catch(() => {});
   }
 });
 render();

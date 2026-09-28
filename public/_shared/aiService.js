@@ -16,6 +16,15 @@ Reply with ONLY one JSON object, no markdown, in this EXACT shape:
 {
   "design_type": "Poster",
   "design_type_reason": "Brief explanation why you classified it this way",
+  "title_text": "The exact main headline/title text of the design, copied EXACTLY as written. Empty string if there is no text.",
+  "grammar_report": {
+    "spelling_grammar": ["specific spelling or grammar mistake in the design's written copy (empty list if none)"],
+    "punctuation": ["specific punctuation problem: missing periods, inconsistent quotes, wrong dashes, missing commas (empty list if none)"],
+    "voice_tone": {"detected": "short tone description (e.g. formal, casual, playful, urgent, professional)", "feedback": "1-2 sentences: is this tone right for this design type, and how to improve it"}
+  },
+  "typography_errors": [
+    {"error": "Short error name", "detail": "What is wrong and where in the design", "fix": "Exact fix"}
+  ],
   "overall": {"score": 0-100, "summary": "2-3 sentence summary"},
   "categories": {
     ${CATS.map((c) => `"${c}": {"score": 0-100, "issues": []}`).join(',\n    ')}
@@ -57,6 +66,10 @@ CRITICAL RULES:
 - Explain in beginner-friendly language.
 - For learning_topics, use ONLY from: ${KB.lessons.map((l) => l.title).join(', ')}.
 - Be ACCURATE with severity: "critical" = broken, "important" = noticeably hurts quality, "minor" = small polish issue.
+- title_text: copy the main headline EXACTLY as written in the design (keep its original casing). If the design has no text at all, use an empty string and empty lists.
+- grammar_report covers ONLY the written copy in the design: spelling, grammar, punctuation, and tone of voice. Not layout or colors.
+- typography_errors covers ONLY typography: font count, font pairing, sizes, weights, line spacing, letter spacing, all-caps abuse, legibility of type. Not color or alignment. List every typography error you can see; each must be specific to THIS design.
+- voice_tone.detected is what the copy SOUNDS like; feedback says whether that tone fits this design type and how to adjust it.
 
 Design type-specific criteria:
 - POSTERS: Impact, readability at distance, hierarchy, bold typography
@@ -121,6 +134,18 @@ function normalize(raw) {
   const out = {
     design_type: str(j.design_type) || 'Unknown',
     design_type_reason: str(j.design_type_reason) || '',
+    title_text: str(j.title_text),
+    grammar_report: {
+      spelling_grammar: list(j.grammar_report?.spelling_grammar),
+      punctuation: list(j.grammar_report?.punctuation),
+      voice_tone: {
+        detected: str(j.grammar_report?.voice_tone?.detected),
+        feedback: str(j.grammar_report?.voice_tone?.feedback)
+      }
+    },
+    typography_errors: (Array.isArray(j.typography_errors) ? j.typography_errors : [])
+      .map((t) => ({ error: str(t.error), detail: str(t.detail), fix: str(t.fix) }))
+      .filter((t) => t.error || t.detail || t.fix),
     overall: { score: clamp(j.overall.score, 0, 100), summary: str(j.overall.summary) },
     categories: {},
     strengths: list(j.strengths),
@@ -159,118 +184,4 @@ function normalize(raw) {
   return out;
 }
 
-async function generateFix({ mime, data, issues, fixAll }) {
-  const apiKey = process.env.AI_API_KEY;
-  const model = process.env.AI_MODEL || 'gemini-3.5-flash-lite';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-  const issueList = issues.map((i, idx) =>
-    `${idx + 1}. [${(i.severity || 'minor').toUpperCase()}] ${i.title}: ${i.description} (Fix: ${i.how_to_improve})`
-  ).join('\n');
-
-  const FIX_SYSTEM = `You are DesignCoach. The user has a design with issues. You must generate a FIXED version of their design as an SVG.
-
-Look at the original design image carefully. Then create an SVG that:
-1. Keeps the same layout, text content, and overall structure
-2. Fixes the specific issues mentioned
-3. Looks professional and polished
-
-Reply with ONLY one JSON object:
-{
-  "fixed_svg": "<svg>...the complete SVG code...</svg>",
-  "changes_made": ["Change 1: what was fixed", "Change 2: what was fixed"],
-  "summary": "Brief summary of all changes made"
-}
-
-IMPORTANT SVG RULES:
-- Use viewBox="0 0 600 800" or appropriate size
-- Include ALL text from the original design
-- Use web-safe fonts (Arial, Helvetica, sans-serif)
-- Make colors high contrast for readability
-- Keep the same general layout structure
-- Make it look like a real, polished design`;
-
-  const parts = [
-    { inline_data: { mime_type: mime, data: data } },
-    { text: `Fix these issues in this design:\n\n${issueList}\n\nGenerate the fixed version as SVG.${fixAll ? ' Fix ALL issues.' : ' Fix the most critical issue.'}` }
-  ];
-
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 55000);
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts }],
-        systemInstruction: { parts: [{ text: FIX_SYSTEM }] },
-        generationConfig: {
-          maxOutputTokens: 16000,
-          temperature: 0.3,
-          responseMimeType: 'application/json'
-        }
-      }),
-    });
-
-    if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      throw new Error('Gemini API error ' + res.status + ': ' + errBody);
-    }
-
-    const j = await res.json();
-    const raw = (j.candidates || [])
-      .flatMap(c => (c.content?.parts || []))
-      .map(p => p.text || '')
-      .join('');
-
-    // Find the JSON object - handle cases where model adds extra text
-    let result;
-    try {
-      // Try parsing the whole thing first
-      result = JSON.parse(raw);
-    } catch {
-      // Find the last valid JSON object
-      const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
-      if (s < 0 || e < 0) throw new Error('no json');
-      try {
-        result = JSON.parse(raw.slice(s, e + 1));
-      } catch {
-        // Try to find balanced braces
-        let depth = 0, end = s;
-        for (let i = s; i < raw.length; i++) {
-          if (raw[i] === '{') depth++;
-          if (raw[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
-        }
-        result = JSON.parse(raw.slice(s, end + 1));
-      }
-    }
-
-    // Clean and convert SVG to data URL
-    let svgData = result.fixed_svg || '';
-    // Remove markdown code blocks if present
-    svgData = svgData.replace(/```svg\n?/g, '').replace(/```\n?/g, '').trim();
-    // Ensure it starts with <svg
-    const svgStart = svgData.indexOf('<svg');
-    if (svgStart > 0) svgData = svgData.slice(svgStart);
-    // Ensure it ends with </svg>
-    const svgEnd = svgData.lastIndexOf('</svg>');
-    if (svgEnd >= 0) svgData = svgData.slice(0, svgEnd + 6);
-
-    if (svgData && svgData.includes('<svg')) {
-      svgData = 'data:image/svg+xml;base64,' + Buffer.from(svgData).toString('base64');
-    } else {
-      svgData = '';
-    }
-
-    return {
-      fixed_image: svgData,
-      changes_made: result.changes_made || [],
-      description: result.summary || 'Fixed design with issues resolved.'
-    };
-  } finally { clearTimeout(t); }
-}
-
 exports.analyzeDesign = async (file) => normalize(await callModel(file));
-exports.generateFix = generateFix;

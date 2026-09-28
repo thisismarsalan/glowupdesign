@@ -4,10 +4,15 @@ An AI design critique and learning tool powered by Gemini. No build step: a stat
 
 ## Features
 - 🎨 **AI Design Analysis** — Upload any design (PNG, JPG, WEBP, PDF) and get detailed feedback
+- 📋 **Summary First** — Overall verdict and summary shown at the top of the results
+- ✅ **Changes Required** — Actionable changes listed as clear bullet points
 - 📐 **8 Design Categories** — Typography, Spacing, Alignment, Color, Readability, Hierarchy, Composition, Grammar
 - 🏷️ **Design Type Detection** — AI identifies whether it's a poster, UI, logo, social media post, etc.
 - ♿ **Accessibility Check** — WCAG ratings, contrast issues, color blindness risk assessment
 - 📍 **Visual Issue Markers** — Numbered markers on your design showing exactly where problems are
+- 📝 **Grammar & Tone** — Spelling/grammar mistakes, punctuation issues, and voice-tone feedback on your copy
+- 🔤 **Title Variations** — Your title text in 3 casings: UPPER CASE, Sentence case, Title Case (main words capitalized)
+- ✒️ **Typography Errors** — Specific type problems: font count, sizes, weights, spacing, legibility
 - 📚 **Learn Section** — 10 beginner-friendly design lessons
 - 🧠 **Practice Mode** — 35+ quiz questions to test your design knowledge
 - 🎨 **Color Suggestions** — AI-suggested color palettes for your design
