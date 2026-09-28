@@ -10,7 +10,7 @@ ANALYSIS STEPS (follow in order):
 STEP 1 — Identify the design type. Choose exactly ONE: "Poster", "Social Media Post", "UI/Web Design", "Logo", "Business Card", "Flyer", "Presentation Slide", "Infographic", "Packaging", "Banner", "Icon", "Other".
 STEP 2 — Apply critique criteria appropriate to THAT design type.
 STEP 3 — Check readability: contrast, font size, visual hierarchy.
-STEP 4 — Give realistic, grounded scores. Never give 0 unless the element is completely absent from the design.
+STEP 4 — Judge fairly. Good designs are common — when a design is well executed, score it high and find little or nothing wrong with it. Never give 0 unless the element is completely absent from the design.
 
 Reply with ONLY one JSON object, no markdown, in this EXACT shape:
 {
@@ -33,6 +33,15 @@ Each issue object: {
   "how_to_improve": "Exact steps to fix",
   "location": {"x": 0-100, "y": 0-100, "width": 0-100, "height": 0-100} OR null
 }
+
+FAIRNESS RULES (most important):
+- Your job is FAIR, balanced feedback — NOT fault-finding. Designers make good designs all the time.
+- ONLY report issues that are clearly, objectively visible and genuinely hurt the design (unreadable text, true misalignment, real contrast failure, typos, broken hierarchy, clearly cramped spacing). If you are not sure something is a real problem, leave it out.
+- NEVER report subjective taste as an issue (e.g. "could be more modern", "not exciting enough", "colors feel dated"). Taste is not an issue.
+- Empty issues lists are correct and COMMON. Most categories in most designs should have NO issues.
+- Maximum 6 issues TOTAL across all categories — only the ones that truly matter. Never invent or pad the list.
+- Use the full score range and do NOT cluster scores around 55-70: 90-100 excellent execution, 75-89 good with minor flaws, 60-74 decent with some real problems, 40-59 flawed, below 40 broken. A clean, competent design deserves 75+.
+- The summary MUST be balanced: first one sentence on what works well, then the main improvement. If the design is strong, say so plainly.
 
 CRITICAL RULES:
 - Coordinates are PERCENTAGES (x,y = top-left corner). Only provide coordinates if you are HIGHLY CONFIDENT. If unsure, use null.
@@ -71,7 +80,7 @@ async function callModel({ mime, data }) {
 
     const parts = [
       { inline_data: { mime_type: mime, data: data } },
-      { text: 'Analyze this design thoroughly following all the steps in your instructions. JSON only.' }
+      { text: 'Analyze this design fairly and objectively following the instructions. Remember: only real, visible problems count as issues. JSON only.' }
     ];
 
     const res = await fetch(url, {
@@ -135,6 +144,13 @@ function normalize(raw) {
       })
     };
   }
+  // Keep feedback honest: at most 6 issues total, most severe first
+  const sev = { critical: 0, important: 1, minor: 2 };
+  const flat = [];
+  for (const c of CATS) for (const i of out.categories[c].issues) flat.push(i);
+  flat.sort((x, y) => sev[x.severity] - sev[y.severity]);
+  const keep = new Set(flat.slice(0, 6));
+  for (const c of CATS) out.categories[c].issues = out.categories[c].issues.filter((i) => keep.has(i));
   return out;
 }
 
