@@ -1,38 +1,34 @@
-const CATS = ['typography', 'spacing', 'alignment', 'color', 'readability', 'hierarchy', 'composition', 'grammar'];
+const CATS = ['typography', 'spacing', 'alignment', 'color', 'readability', 'hierarchy', 'composition'];
 const $ = (s) => document.querySelector(s), app = $('#app');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const store = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
-const S = { file: null, src: null, pdf: false, result: null, demo: false, sel: null, err: '', busy: false, q: 0, pick: null, stage: 0 };
+const S = { file: null, src: null, pdf: false, result: null, demo: false, sel: null, err: '', busy: false, stage: 0 };
 const TYPES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'], MB = 1048576;
 
 /* ---------- demo ---------- */
 const DEMO_SVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 800'><rect width='600' height='800' fill='#f4efe6'/><text x='60' y='300' font-size='84' font-weight='800' font-family='Arial' fill='#1f2a44'>SUMMER</text><text x='60' y='390' font-size='84' font-weight='800' font-family='Arial' fill='#1f2a44'>SALE</text><text x='60' y='450' font-size='26' font-family='Arial' fill='#e2d79c'>Up to 50% off everything in store</text><rect x='270' y='620' width='240' height='60' rx='8' fill='#c9b458'/><text x='300' y='658' font-size='22' font-family='Arial' fill='#fff'>Shop now</text><text x='60' y='775' font-size='11' font-family='Arial' fill='#999'>Terms and conditions apply. Offer valid while stocks lasts.</text></svg>";
-const iss = (title, severity, description, why, how, tip, location) => ({ title, severity, description, why_it_matters: why, how_to_improve: how, learning_tip: tip, location });
+const iss = (title, severity, description, how, location) => ({ title, severity, description, how_to_improve: how, location });
 const DEMO = {
-  design_type: 'Poster', design_type_reason: 'A large-format promotional poster with headline, subtext, and call-to-action button.',
-  overall: { score: 62, summary: 'A bold headline gives this poster a strong start, but low-contrast supporting text and a misaligned button weaken it.' },
-  categories: { typography: { score: 70, issues: [] }, spacing: { score: 65, issues: [] }, alignment: { score: 55, issues: [iss('Button does not align with the text', 'important', 'The button starts further right than the headline and subtitle.', 'Shared edges make a layout feel intentional.', 'Move the button to the same left edge as the headline (or center everything).', 'Draw a vertical line through your text edges and snap other elements to it.', { x: 45, y: 77, width: 40, height: 8 })] }, color: { score: 55, issues: [] }, readability: { score: 40, issues: [iss('Subtitle is nearly invisible', 'critical', 'Pale yellow text on a beige background has very low contrast.', 'If people cannot read the offer, the poster fails at its main job.', 'Use a dark navy for the subtitle, or place it on a dark block.', 'Aim for a contrast ratio of at least 4.5:1.', { x: 9, y: 52, width: 62, height: 7 })] }, hierarchy: { score: 72, issues: [iss('Button blends into the background', 'important', 'The gold button with white text is weak compared with the headline.', 'The call to action should be easy to find.', 'Use a dark or strongly contrasting button with clear text.', 'Reserve your accent color for the one action you want.', { x: 45, y: 77, width: 40, height: 8 })] }, composition: { score: 68, issues: [] }, grammar: { score: 80, issues: [iss('Small verb error in footer', 'minor', '"Offer valid while stocks lasts" should read "while stocks last".', 'Small copy slips reduce trust.', 'Change "lasts" to "last". The footer text is also very small.', 'Proofread text out loud.', { x: 9, y: 95, width: 72, height: 3 })] } },
-  strengths: ['The bold navy headline is clear and is the first thing you notice.', 'A simple, limited palette keeps the poster uncluttered.', 'Generous white space around the headline gives it room to breathe.'],
-  recommendations: ['Darken the subtitle so it is readable.', 'Align the button to the left edge shared by the text.', 'Make the button higher-contrast.', 'Fix the footer grammar.'],
-  learning_topics: ['Contrast', 'Alignment', 'Visual Hierarchy'],
-  accessibility: { contrast_issues: ['Subtitle text has very low contrast against background'], font_size_issues: ['Footer text is very small'], color_blindness_risk: 'low', overall_rating: 'C' },
-  design_suggestions: { color_palette: ['#1f2a44', '#f4efe6', '#c9b458'], layout_tip: 'Align all left edges to a single vertical line for a cleaner look.' },
+  design_type: 'Poster',
   title_text: 'SUMMER SALE',
-  grammar_report: {
-    spelling_grammar: ['"while stocks lasts" should be "while stocks last" (subject–verb agreement).'],
-    punctuation: ['The terms line ends without a full stop.'],
-    voice_tone: { detected: 'Promotional & urgent', feedback: 'Energetic sale tone fits a poster. Keep sentences short and end with a clear stop.' }
+  overall: { score: 62, summary: 'A bold headline gives this poster a strong start, but low-contrast supporting text and a misaligned button weaken it.' },
+  categories: {
+    typography: { score: 70, issues: [] },
+    spacing: { score: 65, issues: [] },
+    alignment: { score: 55, issues: [iss('Button does not align with the text', 'important', 'The button starts further right than the headline and subtitle.', 'Move the button to the same left edge as the headline (or center everything).', { x: 45, y: 77, width: 40, height: 8 })] },
+    color: { score: 55, issues: [] },
+    readability: { score: 40, issues: [iss('Subtitle is nearly invisible', 'critical', 'Pale yellow text on a beige background has very low contrast.', 'Use a dark navy for the subtitle, or place it on a dark block.', { x: 9, y: 52, width: 62, height: 7 })] },
+    hierarchy: { score: 72, issues: [iss('Button blends into the background', 'important', 'The gold button with white text is weak compared with the headline.', 'Use a dark or strongly contrasting button with clear text.', { x: 45, y: 77, width: 40, height: 8 })] },
+    composition: { score: 68, issues: [] }
   },
+  recommendations: ['Darken the subtitle so it is readable.', 'Align the button to the left edge shared by the text.', 'Make the button higher-contrast.', 'Enlarge the footer text so it can be read.'],
   typography_errors: [
-    { error: 'Footer text too small', detail: 'The terms line is set at ~11px — too small to read at poster size.', fix: 'Use at least 14–16px for supporting text.' },
+    { error: 'Footer text too small', detail: 'The terms line is ~11px — too small to read at poster size.', fix: 'Use at least 14–16px for supporting text.' },
     { error: 'Weak size hierarchy', detail: 'Subtitle and button text sizes are too close to each other.', fix: 'Use a clear size scale, e.g. 84 / 32 / 18 px.' }
   ]
 };
 
 /* ---------- helpers ---------- */
 const issues = (r) => { let a = []; for (const c of CATS) for (const i of r.categories[c]?.issues || []) a.push({ ...i, cat: c }); const o = { critical: 0, important: 1, minor: 2 }; return a.sort((x, y) => o[x.severity] - o[y.severity]).map((x, n) => ({ ...x, n: n + 1 })); };
-const hist = () => store.get('dc_history', []);
-const settings = () => ({ save: true, ...store.get('dc_settings', {}) });
 const readData = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
 const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 async function shrink(src, max, q) { const i = await loadImg(src), k = Math.min(1, max / Math.max(i.width, i.height)), c = document.createElement('canvas'); c.width = Math.round(i.width * k); c.height = Math.round(i.height * k); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(i, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', q); }
@@ -61,8 +57,7 @@ async function handlePaste(e) {
       const file = item.getAsFile();
       if (file) {
         const ext = item.type.split('/')[1] || 'png';
-        const namedFile = new File([file], `pasted-design.${ext}`, { type: item.type });
-        pick(namedFile);
+        pick(new File([file], `pasted-design.${ext}`, { type: item.type }));
         return;
       }
     }
@@ -88,187 +83,72 @@ async function pick(f) {
 
 async function analyze() {
   S.busy = true; S.err = ''; S.stage = 0; render();
-  const timer = setInterval(() => { S.stage = Math.min(S.stage + 1, 6); render(); }, 3000);
+  const timer = setInterval(() => { S.stage = Math.min(S.stage + 1, 3); render(); }, 2500);
   const ctrl = new AbortController(), to = setTimeout(() => ctrl.abort(), 120000);
   try {
     const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify({ image: S.src }) });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(j.error || 'Something went wrong while analyzing your design. Please try again.');
     S.result = j; S.demo = false; S.sel = null;
-    if (settings().save) saveHistory();
     S.busy = false; clearInterval(timer); go('analysis'); render();
   } catch (e) {
     S.err = e.name === 'AbortError' ? 'The analysis took too long. Try a smaller image or try again.' : (e instanceof TypeError ? 'Network problem. Check your connection and try again.' : e.message);
     S.busy = false;
   } finally { clearInterval(timer); clearTimeout(to); render(); }
 }
-async function saveHistory() {
-  const thumb = S.pdf ? '' : await shrink(S.src, 320, 0.6), n = issues(S.result).length;
-  const h = [{ id: Date.now(), name: S.file?.name || 'Design', date: new Date().toISOString(), score: S.result.overall.score, count: n, thumb, result: S.result }, ...hist()].slice(0, 30);
-  while (h.length && !store.set('dc_history', h)) h.pop();
-}
-
-/* ---------- export helpers ---------- */
-function generateShareText(r) {
-  const is = issues(r);
-  let txt = `DESIGNCOACH ANALYSIS\n${'='.repeat(40)}\n\n`;
-  txt += `Design Type: ${r.design_type || 'Unknown'}\n`;
-  txt += `Overall Score: ${r.overall.score}/100 (${scoreLabel(r.overall.score)})\n`;
-  txt += `Summary: ${r.overall.summary}\n\n`;
-  txt += `CATEGORY SCORES:\n`;
-  for (const c of CATS) txt += `  ${c.charAt(0).toUpperCase() + c.slice(1)}: ${r.categories[c].score}/100\n`;
-  if (r.accessibility) {
-    txt += `\nACCESSIBILITY:\n`;
-    txt += `  WCAG Rating: ${r.accessibility.overall_rating || 'N/A'}\n`;
-    txt += `  Color Blindness Risk: ${r.accessibility.color_blindness_risk || 'Unknown'}\n`;
-  }
-  txt += `\nISSUES (${is.length}):\n`;
-  is.forEach((i, idx) => { txt += `  ${idx + 1}. [${i.severity.toUpperCase()}] ${i.title}\n     ${i.description}\n     Fix: ${i.how_to_improve}\n\n`; });
-  txt += `STRENGTHS:\n`;
-  (r.strengths || []).forEach(s => { txt += `  + ${s}\n`; });
-  txt += `\nCHANGES REQUIRED:\n`;
-  (r.recommendations || []).forEach((s) => { txt += `  • ${s}\n`; });
-  const tv = r.title_text ? titleVars(r.title_text) : null;
-  if (tv) {
-    txt += `\nTITLE TEXT VARIATIONS:\n`;
-    txt += `  Original: ${r.title_text}\n`;
-    txt += `  UPPER CASE: ${tv.upper}\n`;
-    txt += `  Sentence case: ${tv.sentence}\n`;
-    txt += `  Title Case: ${tv.title}\n`;
-  }
-  const g = r.grammar_report;
-  if (g && ((g.spelling_grammar || []).length || (g.punctuation || []).length || g.voice_tone?.detected || g.voice_tone?.feedback)) {
-    txt += `\nGRAMMAR & TONE:\n`;
-    (g.spelling_grammar || []).forEach((s) => { txt += `  • [Grammar] ${s}\n`; });
-    (g.punctuation || []).forEach((s) => { txt += `  • [Punctuation] ${s}\n`; });
-    if (g.voice_tone?.detected || g.voice_tone?.feedback) txt += `  Voice & Tone: ${g.voice_tone?.detected || ''} — ${g.voice_tone?.feedback || ''}\n`;
-  }
-  if (r.typography_errors?.length) {
-    txt += `\nTYPOGRAPHY ERRORS:\n`;
-    r.typography_errors.forEach((t, i) => { txt += `  ${i + 1}. ${t.error}${t.detail ? ` — ${t.detail}` : ''}\n     Fix: ${t.fix}\n`; });
-  }
-  if (r.design_suggestions?.color_palette?.length) txt += `\nSuggested Colors: ${r.design_suggestions.color_palette.join(', ')}\n`;
-  if (r.design_suggestions?.layout_tip) txt += `Layout Tip: ${r.design_suggestions.layout_tip}\n`;
-  return txt;
-}
-function downloadText(filename, text) {
-  const blob = new Blob([text], { type: 'text/plain' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href);
-}
-function downloadJSON(filename, obj) {
-  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href);
-}
 
 /* ---------- views ---------- */
 function home() {
   if (S.busy) {
-    const st = ['Detecting design type', 'Checking typography', 'Checking spacing & alignment', 'Checking color & contrast', 'Analyzing hierarchy & composition', 'Checking accessibility', 'Preparing feedback'];
-    return `<div class="load card" role="status" aria-live="polite"><div class="spin"></div><h2 style="margin-top:0">Analyzing your design...</h2><ul style="padding:0">${st.map((s, i) => `<li class="${i < S.stage ? 'done' : i === S.stage ? 'on' : ''}">${i < S.stage ? '✓' : i === S.stage ? '●' : '○'} ${s}</li>`).join('')}</ul><p class="mut small">This may take 15-60 seconds depending on image size.</p></div>`;
+    const st = ['Reading your design', 'Checking typography & layout', 'Scoring categories', 'Preparing feedback'];
+    return `<div class="load card" role="status" aria-live="polite"><div class="spin"></div><h2 style="margin-top:0">Analyzing your design...</h2><ul style="padding:0">${st.map((s, i) => `<li class="${i < S.stage ? 'done' : i === S.stage ? 'on' : ''}">${i < S.stage ? '✓' : i === S.stage ? '●' : '○'} ${s}</li>`).join('')}</ul></div>`;
   }
   const up = S.src ? `<div class="card prev">${S.pdf ? `<p class="mut" style="text-align:center">📄 PDF selected (preview not available)</p>` : `<img src="${S.src}" alt="Preview of your uploaded design">`}<p style="text-align:center;margin:0"><b>${esc(S.file.name)}</b> · <span class="mut">${(S.file.size / MB).toFixed(2)} MB</span></p><div class="row"><button class="pri" data-act="analyze">🔍 Analyze Design</button><label class="btn">Replace<input type="file" hidden accept=".png,.jpg,.jpeg,.webp,.pdf" data-file></label><button class="dng" data-act="remove">Remove</button></div></div>`
-    : `<label class="drop" id="drop"><input type="file" accept=".png,.jpg,.jpeg,.webp,.pdf" data-file><b style="font-size:18px">Drag & drop your design here</b><p class="mut">PNG • JPG • WEBP • PDF · up to 10 MB</p><span class="btn pri">Choose a file</span></label>`;
-  return `<section class="hero"><div class="eyebrow">DESIGNCOACH</div><h1>Design better. Learn why.</h1><p class="mut">Upload your design and get AI-powered feedback on typography, spacing, color, accessibility, and more.</p></section>
+    : `<label class="drop" id="drop"><input type="file" accept=".png,.jpg,.jpeg,.webp,.pdf" data-file><b style="font-size:18px">Drag &amp; drop your design here</b><p class="mut">PNG • JPG • WEBP • PDF · up to 10 MB</p><span class="btn pri">Choose a file</span></label>`;
+  return `<section class="hero"><div class="eyebrow">DESIGNCOACH</div><h1>Design analysis, to the point.</h1><p class="mut">Upload your design and get clear, actionable feedback.</p></section>
   ${up}
-  <div class="paste-hint card" style="max-width:720px;margin:16px auto;text-align:center;background:var(--bg)"><p style="margin:0"><b>📋 Tip:</b> Copy any image and press <kbd>Ctrl+V</kbd> to paste it directly!</p></div>
   ${S.err ? `<p class="err" role="alert">${esc(S.err)}</p>` : ''}
   <div class="row"><button data-act="demo">🎨 Try a sample design</button></div>
-  <p class="mut small" style="text-align:center">🔒 Your design is used only for analysis. It is not saved on our servers.</p>`;
+  <p class="mut small" style="text-align:center">🔒 Your design is used only for analysis and is not saved.</p>`;
 }
 
 function analysis() {
   const r = S.result; if (!r) return `<p class="hero">No analysis yet. <a href="#home">Analyze a design</a>.</p>`;
   const is = issues(r);
   const marks = is.filter((i) => i.location).map((i) => { const l = i.location; return `<div class="box ${i.severity}" style="left:${l.x}%;top:${l.y}%;width:${l.width}%;height:${l.height}%;${S.sel === i.n ? '' : 'opacity:.35'}"></div><button class="mk ${i.severity}" style="left:${l.x}%;top:${l.y}%" data-act="sel" data-n="${i.n}" aria-label="Issue ${i.n}: ${esc(i.title)}">${i.n}</button>`; }).join('');
-  const cards = is.map((i) => `<div class="card issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}"><button style="all:unset;cursor:pointer;display:block;width:100%" data-act="sel" data-n="${i.n}"><span class="tag">${i.severity} · ${i.cat}${i.location ? '' : ' · no marker'}</span><h3>${i.n}. ${esc(i.title)}</h3></button><p style="margin:.3em 0">${esc(i.description)}</p><p class="small"><b>Why it matters:</b> ${esc(i.why_it_matters)}</p><p class="small"><b>How to improve:</b> ${esc(i.how_to_improve)}</p><p class="small mut">💡 ${esc(i.learning_tip)}</p></div>`).join('');
-
-  const typeBadge = r.design_type ? `<span class="badge">${esc(r.design_type)}</span> ${r.design_type_reason ? `<span class="mut small"> · ${esc(r.design_type_reason)}</span>` : ''}` : '';
-  const critCount = is.filter(i => i.severity === 'critical').length;
-  const impCount = is.filter(i => i.severity === 'important').length;
-  const minCount = is.filter(i => i.severity === 'minor').length;
+  const issueRows = is.map((i) => `<div class="issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}" data-act="sel" data-n="${i.n}" style="cursor:pointer"><span class="tag">${i.severity} · ${i.cat}</span><h3 style="margin:.25em 0">${i.n}. ${esc(i.title)}</h3><p class="small" style="margin:.25em 0">${esc(i.description)}</p><p class="small" style="margin:.25em 0"><b>Fix:</b> ${esc(i.how_to_improve)}</p></div>`).join('');
   const sc = scoreColor(r.overall.score);
-
-  // Summary card — shown at the very top
-  const summaryCard = `<div class="card summary-card"><h2 style="margin:0 0 12px">📋 Summary</h2><p style="margin:0 0 16px;font-size:17px;line-height:1.6">${esc(r.overall.summary)}</p><div class="summary-header"><div class="big" style="color:${sc}">${r.overall.score}</div><div><div class="mut small">Overall Score</div><div style="font-weight:600;color:${sc}">${scoreLabel(r.overall.score)}</div></div></div>${typeBadge ? `<p style="margin:10px 0 0">${typeBadge}</p>` : ''}<div class="summary-stats"><div class="stat"><b style="color:var(--crit)">${critCount}</b><span class="small mut">Critical</span></div><div class="stat"><b style="color:var(--imp)">${impCount}</b><span class="small mut">Important</span></div><div class="stat"><b style="color:var(--min)">${minCount}</b><span class="small mut">Minor</span></div><div class="stat"><b>${is.length}</b><span class="small mut">Total Issues</span></div></div></div>`;
-
-  // Changes Required — as bullet points
-  const changesCard = `<h2>✅ Changes Required</h2><div class="card"><ul class="clean">${(r.recommendations || []).map((s) => `<li class="chg">${esc(s)}</li>`).join('') || '<li class="ok">No changes required — nice work!</li>'}</ul></div>`;
-
-  // Title text variations — UPPER CASE / Sentence case / Title Case
   const tv = r.title_text ? titleVars(r.title_text) : null;
-  const titleSection = tv ? `<h2>🔤 Title Variations</h2><div class="card"><p class="small mut" style="margin-top:0">Title text in your design: <b style="color:var(--ink)">${esc(r.title_text)}</b> — here are 3 casing options:</p><div class="var-grid"><div class="var-card"><div class="lbl">UPPER CASE</div><div class="txt">${esc(tv.upper)}</div><button data-act="copy-var" data-var="upper">📋 Copy</button></div><div class="var-card"><div class="lbl">Sentence case</div><div class="txt">${esc(tv.sentence)}</div><button data-act="copy-var" data-var="sentence">📋 Copy</button></div><div class="var-card"><div class="lbl">Title Case (main words)</div><div class="txt">${esc(tv.title)}</div><button data-act="copy-var" data-var="title">📋 Copy</button></div></div></div>` : '';
-
-  // Grammar & tone — spelling/grammar, punctuation, voice tone
-  const g = r.grammar_report;
-  const gRows = [];
-  if (g?.spelling_grammar?.length) gRows.push(`<p class="small" style="margin:12px 0 4px"><b>✍️ Spelling & Grammar</b></p><ul class="clean">${g.spelling_grammar.map((x) => `<li class="dng-item">${esc(x)}</li>`).join('')}</ul>`);
-  if (g?.punctuation?.length) gRows.push(`<p class="small" style="margin:12px 0 4px"><b>📌 Punctuation</b></p><ul class="clean">${g.punctuation.map((x) => `<li class="dng-item">${esc(x)}</li>`).join('')}</ul>`);
-  if (g?.voice_tone?.detected || g?.voice_tone?.feedback) gRows.push(`<div class="tone-box"><p class="small" style="margin:0"><b>🎙️ Voice &amp; Tone:</b> ${esc(g.voice_tone?.detected || '')}</p>${g.voice_tone?.feedback ? `<p class="small mut" style="margin:6px 0 0">${esc(g.voice_tone.feedback)}</p>` : ''}</div>`);
-  const grammarSection = gRows.length ? `<h2>📝 Grammar &amp; Tone</h2><div class="card">${gRows.join('')}</div>` : '';
-
-  // Typography errors
   const typoList = (r.typography_errors || []).filter((t) => t.error || t.detail || t.fix);
-  const typoSection = typoList.length ? `<h2>✒️ Typography Errors</h2><div class="card"><ul class="clean">${typoList.map((t) => `<li class="typo-item"><b>${esc(t.error)}</b>${t.detail ? ` <span class="mut">— ${esc(t.detail)}</span>` : ''}${t.fix ? `<br><span class="small">Fix: ${esc(t.fix)}</span>` : ''}</li>`).join('')}</ul></div>` : '';
 
-  // Accessibility section
-  const acc = r.accessibility;
-  const accSection = acc ? `<h2>♿ Accessibility</h2><div class="card"><div class="scores" style="grid-template-columns:repeat(2,1fr)"><div class="sc"><b style="font-size:28px">${esc(acc.overall_rating || 'N/A')}</b><span class="small mut">WCAG Rating</span></div><div class="sc"><b style="font-size:14px">${esc(acc.color_blindness_risk || 'Unknown')}</b><span class="small mut">Color Blind Risk</span></div></div>${acc.contrast_issues?.length ? `<p class="small" style="margin-top:12px"><b>⚠️ Contrast Issues:</b></p><ul class="clean">${acc.contrast_issues.map(i => `<li class="dng-item">${esc(i)}</li>`).join('')}</ul>` : ''}${acc.font_size_issues?.length ? `<p class="small"><b>📏 Font Size Issues:</b></p><ul class="clean">${acc.font_size_issues.map(i => `<li class="dng-item">${esc(i)}</li>`).join('')}</ul>` : ''}</div>` : '';
-
-  // Color suggestions
-  const suggestions = r.design_suggestions;
-  const sugSection = suggestions ? `<h2>🎨 Suggestions</h2><div class="card">${suggestions.color_palette?.length ? `<p class="small"><b>Suggested Color Palette:</b></p><div class="color-palette">${suggestions.color_palette.map(c => `<div class="color-swatch" style="background:${esc(c)}" title="${esc(c)}"><span class="color-hex">${esc(c)}</span></div>`).join('')}</div>` : ''}${suggestions.layout_tip ? `<p class="small" style="margin-top:12px"><b>💡 Layout Tip:</b> ${esc(suggestions.layout_tip)}</p>` : ''}</div>` : '';
-
-  return `<div class="dash"><div class="stage"><div class="card" style="text-align:center">${S.demo ? '<p><span class="badge">Demo Analysis</span> <span class="mut small">This is a built-in sample.</span></p>' : ''}<div class="wrap"><img src="${S.src}" alt="The analyzed design with numbered issue markers">${marks}</div>${S.pdf ? '<p class="mut small">Issue markers are not available for PDFs.</p>' : ''}</div></div>
+  return `<div class="dash"><div class="stage"><div class="card" style="text-align:center">${S.demo ? '<p class="mut small" style="margin:0 0 8px">Demo — sample data</p>' : ''}<div class="wrap"><img src="${S.src}" alt="The analyzed design with numbered issue markers">${marks}</div>${S.pdf ? '<p class="mut small">Issue markers are not available for PDFs.</p>' : ''}</div></div>
 <div>
-${summaryCard}
-${changesCard}
-${titleSection}
-${grammarSection}
-${typoSection}
-<h3 style="margin-top:20px">Category Scores</h3><div class="card"><div class="scores">${CATS.map((c) => { const s = r.categories[c].score; return `<div class="sc"><b style="color:${scoreColor(s)}">${s}</b><span class="small mut">${c[0].toUpperCase() + c.slice(1)}</span></div>`; }).join('')}</div><p class="mut small">Scores reflect how closely a design follows specific principles, not artistic talent.</p></div>
-${accSection}
-<h2>Needs Attention</h2>${cards || '<p class="card mut">No issues found. Nice work!</p>'}
-<h2>What's Working</h2><div class="card"><ul class="clean">${r.strengths.map((s) => `<li class="ok"><span style="color:var(--ink)">${esc(s)}</span></li>`).join('') || '<li>—</li>'}</ul></div>
-${sugSection}
-<h2>Learn</h2><div class="row" style="justify-content:flex-start">${r.learning_topics.map((t) => { const l = KB.lessons.find((x) => x.title.toLowerCase() === t.toLowerCase()); return `<a class="btn" href="#learn${l ? ':' + l.id : ''}">${esc(t)}</a>`; }).join('')}</div>
-<h2>Export & Share</h2><div class="card"><div class="row" style="justify-content:flex-start"><button data-act="export-txt">📄 Download Report</button><button data-act="export-json">📦 Download JSON</button><button data-act="share-analysis">📋 Copy Summary</button></div></div>
-<p class="row" style="justify-content:flex-start;margin-top:24px"><a class="btn pri" href="#home" data-act="new">🔍 Analyze another</a></p></div></div>
+<div class="card">
+  <div class="summary-header"><div class="big" style="color:${sc}">${r.overall.score}</div><div><div class="mut small">Overall Score</div><div style="font-weight:600;color:${sc}">${scoreLabel(r.overall.score)}${r.design_type ? ` · <span class="badge">${esc(r.design_type)}</span>` : ''}</div></div></div>
+  <p style="margin:10px 0 0">${esc(r.overall.summary)}</p>
 
-`;
-}
+  <div class="a-sec"><h3>Category Scores</h3><div class="scores">${CATS.map((c) => { const s = r.categories[c].score; return `<div class="sc"><b style="color:${scoreColor(s)}">${s}</b><span class="small mut">${c[0].toUpperCase() + c.slice(1)}</span></div>`; }).join('')}</div></div>
 
-function learn(id) {
-  if (id === 'practice') return practice();
-  if (id) { const l = KB.lessons.find((x) => x.id === id); if (l) return `<a href="#learn">← All lessons</a><div class="card" style="margin-top:12px;max-width:720px"><h1>${l.title}</h1>${[['What it is', l.what], ['Why it matters', l.why], ['How to spot it', l.spot], ['Common mistake', l.mistake], ['Good practice', l.good], ['Quick tip', l.tip], ['Exercise', l.ex]].map(([a, b]) => `<h3>${a}</h3><p style="margin-top:0">${esc(b)}</p>`).join('')}</div>`; }
-  return `<h1>📚 Learn</h1><p class="mut">Beginner lessons on the fundamentals of good design.</p><div class="grid">${KB.lessons.map((l) => `<a class="card" style="text-decoration:none" href="#learn:${l.id}"><h3>${l.title}</h3><p class="mut small" style="margin:0">${esc(l.what)}</p></a>`).join('')}<a class="card" style="text-decoration:none;border-color:var(--acc)" href="#learn:practice"><h3>🧠 Practice Mode →</h3><p class="mut small" style="margin:0">Test yourself with ${KB.practice.length} questions.</p></a></div>`;
-}
+  <div class="a-sec"><h3>✅ Changes Required</h3><ul class="clean">${(r.recommendations || []).map((s) => `<li class="chg">${esc(s)}</li>`).join('') || '<li class="ok">No changes required — nice work!</li>'}</ul></div>
 
-function practice() {
-  const Q = KB.practice; if (S.q >= Q.length) return `<div class="card hero"><h1>🎉 Done!</h1><p>You answered all ${Q.length} questions.</p><button class="pri" data-act="restart">Practice again</button> <a class="btn" href="#learn">Back to lessons</a></div>`;
-  const q = Q[S.q], a = S.pick !== null;
-  const pct = Math.round((S.q / Q.length) * 100);
-  return `<a href="#learn">← Lessons</a><div class="card" style="max-width:640px;margin-top:12px"><div style="background:var(--line);border-radius:99px;height:8px;margin-bottom:16px"><div style="background:var(--acc);height:100%;border-radius:99px;width:${pct}%;transition:width .3s"></div></div><p class="mut small">Question ${S.q + 1} of ${Q.length}</p><h2 style="margin-top:0">${esc(q.q)}</h2>${q.o.map((o, i) => `<button style="display:block;width:100%;text-align:left;margin-bottom:8px;${a && i === q.a ? 'border-color:var(--ok);background:rgba(21,128,61,.08)' : a && i === S.pick ? 'border-color:var(--crit);background:rgba(185,28,28,.08)' : ''}" data-act="ans" data-i="${i}" ${a ? 'disabled' : ''}>${esc(o)}</button>`).join('')}${a ? `<p role="status"><b class="${S.pick === q.a ? 'ok' : 'dng'}">${S.pick === q.a ? '✅ Correct!' : '❌ Not quite.'}</b> ${esc(q.why)}</p><button class="pri" data-act="next">Next →</button>` : ''}</div>`;
-}
+  <div class="a-sec"><h3>🔍 Issues</h3>${issueRows || '<p class="mut" style="margin:0">No issues found. Nice work!</p>'}</div>
 
-function history() {
-  const h = hist();
-  return `<h1>📋 History</h1><p class="mut">Saved on this device only. Original designs are never stored.</p>${h.length ? `<div class="grid">${h.map((x) => `<div class="card">${x.thumb ? `<img class="thumb" src="${x.thumb}" alt="Thumbnail of ${esc(x.name)}" loading="lazy">` : '<div class="thumb" style="display:grid;place-items:center">📄</div>'}<h3 style="margin-top:10px">${esc(x.name)}</h3><p class="mut small">${new Date(x.date).toLocaleDateString()} · <span style="color:${scoreColor(x.score)};font-weight:600">Score ${x.score}</span> · ${x.count} issue${x.count === 1 ? '' : 's'}</p><div class="row" style="justify-content:flex-start"><button data-act="open" data-id="${x.id}">Open</button><button class="dng" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join('')}</div>` : '<p class="card">No analyses yet. <a href="#home">Analyze a design</a>.</p>'}`;
-}
+  ${typoList.length ? `<div class="a-sec"><h3>✒️ Typography Errors</h3><ul class="clean">${typoList.map((t) => `<li class="typo-item"><b>${esc(t.error)}</b>${t.detail ? ` <span class="mut">— ${esc(t.detail)}</span>` : ''}${t.fix ? `<br><span class="small">Fix: ${esc(t.fix)}</span>` : ''}</li>`).join('')}</ul></div>` : ''}
 
-function settingsView() {
-  return `<h1>⚙️ Settings</h1><div class="card" style="max-width:560px"><label><input type="checkbox" data-set="save" ${settings().save ? 'checked' : ''}> Save analyses to History on this device</label><p class="mut small">Your design is used only for analysis and is not stored on our servers.</p><button class="dng" data-act="clear">Delete all saved history</button></div>`;
+  ${tv ? `<div class="a-sec"><h3>🔤 Title Variations</h3><div class="var-grid"><div class="var-card"><div class="lbl">UPPER CASE</div><div class="txt">${esc(tv.upper)}</div><button data-act="copy-var" data-var="upper">📋 Copy</button></div><div class="var-card"><div class="lbl">Sentence case</div><div class="txt">${esc(tv.sentence)}</div><button data-act="copy-var" data-var="sentence">📋 Copy</button></div><div class="var-card"><div class="lbl">Title Case (main words)</div><div class="txt">${esc(tv.title)}</div><button data-act="copy-var" data-var="title">📋 Copy</button></div></div></div>` : ''}
+</div>
+<p class="row" style="justify-content:flex-start;margin-top:16px"><a class="btn pri" href="#home" data-act="new">🔍 Analyze another</a></p>
+</div></div>`;
 }
 
 /* ---------- router + events ---------- */
 function render() {
-  const [p, id] = (location.hash.slice(1) || 'home').split(':'), y = scrollY;
-  document.querySelectorAll('nav a').forEach((a) => a.toggleAttribute('aria-current', a.hash.slice(1) === (p === 'analysis' ? 'home' : p)) || a.removeAttribute('aria-current'));
-  document.querySelectorAll('nav a').forEach((a) => { if (a.hash.slice(1) === (p === 'analysis' ? 'home' : p)) a.setAttribute('aria-current', 'page'); });
-  app.innerHTML = { home, analysis, learn: () => learn(id), history, settings: settingsView }[p]?.() ?? home();
+  const p = (location.hash.slice(1) || 'home').split(':')[0], y = scrollY;
+  app.innerHTML = { home, analysis }[p]?.() ?? home();
   scrollTo(0, y);
 }
 addEventListener('hashchange', () => { scrollTo(0, 0); render(); });
-document.addEventListener('change', (e) => { if (e.target.matches('[data-file]')) pick(e.target.files[0]); if (e.target.dataset.set) { store.set('dc_settings', { ...settings(), [e.target.dataset.set]: e.target.checked }); } });
+document.addEventListener('change', (e) => { if (e.target.matches('[data-file]')) pick(e.target.files[0]); });
 ['dragover', 'dragleave', 'drop'].forEach((t) => document.addEventListener(t, (e) => { const d = e.target.closest?.('#drop'); if (!d) return; e.preventDefault(); d.classList.toggle('over', t === 'dragover'); if (t === 'drop') pick(e.dataTransfer.files[0]); }));
 document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]'); if (!b) return; const a = b.dataset.act, n = +b.dataset.n;
@@ -277,25 +157,8 @@ document.addEventListener('click', (e) => {
   else if (a === 'new') { S.file = S.src = null; S.result = null; }
   else if (a === 'demo') { S.src = 'data:image/svg+xml,' + encodeURIComponent(DEMO_SVG); S.result = DEMO; S.demo = true; S.pdf = false; S.sel = null; go('analysis'); }
   else if (a === 'sel') { S.sel = n; render(); document.getElementById('i' + n)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth', block: 'center' }); }
-  else if (a === 'ans') { S.pick = +b.dataset.i; render(); }
-  else if (a === 'next') { S.q++; S.pick = null; render(); }
-  else if (a === 'restart') { S.q = 0; S.pick = null; render(); }
-  else if (a === 'open') { const x = hist().find((h) => h.id === +b.dataset.id); if (x) { S.result = x.result; S.src = x.thumb; S.pdf = !x.thumb; S.demo = false; S.sel = null; go('analysis'); } }
-  else if (a === 'del') { if (confirm('Delete this analysis?')) { store.set('dc_history', hist().filter((h) => h.id !== +b.dataset.id)); render(); } }
-  else if (a === 'clear') { if (confirm('Delete all saved history?')) { store.set('dc_history', []); render(); } }
-  else if (a === 'export-txt') { if (S.result) downloadText('designcoach-report.txt', generateShareText(S.result)); }
-  else if (a === 'export-json') { if (S.result) downloadJSON('designcoach-analysis.json', S.result); }
-  else if (a === 'share-analysis') {
-    if (S.result) {
-      navigator.clipboard.writeText(generateShareText(S.result)).then(() => {
-        b.textContent = '✅ Copied!';
-        setTimeout(() => { b.textContent = '📋 Copy Summary'; }, 2000);
-      }).catch(() => downloadText('designcoach-report.txt', generateShareText(S.result)));
-    }
-  }
   else if (a === 'copy-var') {
-    const tv = titleVars(S.result?.title_text || '');
-    const t = tv[b.dataset.var] || '';
+    const t = titleVars(S.result?.title_text || '')[b.dataset.var] || '';
     if (t) navigator.clipboard.writeText(t).then(() => { b.textContent = '✅ Copied!'; setTimeout(() => { b.textContent = '📋 Copy'; }, 1500); }).catch(() => {});
   }
 });
