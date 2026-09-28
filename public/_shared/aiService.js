@@ -4,7 +4,7 @@ const CATS = ['alignment', 'spacing', 'typography', 'color', 'readability', 'hie
 const clamp = (n, a, b) => Math.max(a, Math.min(b, Number.isFinite(+n) ? +n : a));
 const str = (v) => (typeof v === 'string' ? v : '');
 
-const SYSTEM = `You are DesignCoach, an expert graphic design mentor. Critique the supplied design (image or PDF). Be specific and to the point.
+const SYSTEM = `You are GlowUp, an expert graphic design mentor. Critique the supplied design (image or PDF). Be specific and to the point.
 
 ANALYSIS STEPS (follow in order):
 STEP 1 — Identify the design type. Choose exactly ONE: "Poster", "Social Media Post", "UI/Web Design", "Logo", "Business Card", "Flyer", "Presentation Slide", "Infographic", "Packaging", "Banner", "Icon", "Other".

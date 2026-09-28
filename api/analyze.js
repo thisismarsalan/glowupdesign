@@ -1,4 +1,4 @@
-// DesignCoach /api/analyze — Vercel serverless adapter (repo-root api/ variant)
+// GlowUp /api/analyze — Vercel serverless adapter (repo-root api/ variant)
 const { analyzeDesign } = require('../public/_shared/aiService');
 
 const MAGIC = { 'image/jpeg': [0xff, 0xd8], 'image/png': [0x89, 0x50], 'image/webp': [0x52, 0x49], 'application/pdf': [0x25, 0x50] };
@@ -7,7 +7,7 @@ const MAX = 10 * 1024 * 1024;
 module.exports = async (req, res) => {
   const R = (c, b) => res.status(c).json(b);
   if (req.method !== 'POST') return R(405, { error: 'Method not allowed.' });
-  if (!process.env.AI_API_KEY) return R(500, { error: 'DesignCoach is not configured yet: the AI_API_KEY environment variable is missing. See the README.' });
+  if (!process.env.AI_API_KEY) return R(500, { error: 'GlowUp is not configured yet: the AI_API_KEY environment variable is missing. See the README.' });
   let mime, buf;
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});

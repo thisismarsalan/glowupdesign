@@ -1,4 +1,4 @@
-# DesignCoach — AI design analysis
+# GlowUp — AI design analysis
 
 Upload a design and get a clear, to-the-point AI critique. No build step: a static site (`public/`) plus one secure Vercel serverless function (`api/`).
 

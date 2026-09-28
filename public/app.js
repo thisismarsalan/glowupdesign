@@ -35,6 +35,7 @@ async function shrink(src, max, q) { const i = await loadImg(src), k = Math.min(
 const go = (h) => { location.hash = h; };
 const scoreColor = (s) => s >= 75 ? 'var(--ok)' : s >= 50 ? 'var(--imp)' : 'var(--crit)';
 const scoreLabel = (s) => s >= 85 ? 'Excellent' : s >= 70 ? 'Good' : s >= 50 ? 'Fair' : s >= 30 ? 'Needs Work' : 'Poor';
+const sevLabel = { critical: 'Critical', important: 'Important', minor: 'Minor' };
 
 /* ---------- title text variations ---------- */
 const titleVars = (t) => {
@@ -105,7 +106,7 @@ function home() {
   }
   const up = S.src ? `<div class="card prev">${S.pdf ? `<p class="mut" style="text-align:center">📄 PDF selected (preview not available)</p>` : `<img src="${S.src}" alt="Preview of your uploaded design">`}<p style="text-align:center;margin:0"><b>${esc(S.file.name)}</b> · <span class="mut">${(S.file.size / MB).toFixed(2)} MB</span></p><div class="row"><button class="pri" data-act="analyze">🔍 Analyze Design</button><label class="btn">Replace<input type="file" hidden accept=".png,.jpg,.jpeg,.webp,.pdf" data-file></label><button class="dng" data-act="remove">Remove</button></div></div>`
     : `<label class="drop" id="drop"><input type="file" accept=".png,.jpg,.jpeg,.webp,.pdf" data-file><b style="font-size:18px">Drag &amp; drop your design here</b><p class="mut">PNG • JPG • WEBP • PDF · up to 10 MB</p><span class="btn pri">Choose a file</span></label>`;
-  return `<section class="hero"><div class="eyebrow">DESIGNCOACH</div><h1>Design analysis, to the point.</h1><p class="mut">Upload your design and get clear, actionable feedback.</p></section>
+  return `<section class="hero"><div class="eyebrow">GLOWUP</div><h1>Design analysis, to the point.</h1><p class="mut">Upload your design and get clear, actionable feedback.</p></section>
   ${up}
   ${S.err ? `<p class="err" role="alert">${esc(S.err)}</p>` : ''}
   <div class="row"><button data-act="demo">🎨 Try a sample design</button></div>
@@ -116,7 +117,7 @@ function analysis() {
   const r = S.result; if (!r) return `<p class="hero">No analysis yet. <a href="#home">Analyze a design</a>.</p>`;
   const is = issues(r);
   const marks = is.filter((i) => i.location).map((i) => { const l = i.location; return `<div class="box ${i.severity}" style="left:${l.x}%;top:${l.y}%;width:${l.width}%;height:${l.height}%;${S.sel === i.n ? '' : 'opacity:.35'}"></div><button class="mk ${i.severity}" style="left:${l.x}%;top:${l.y}%" data-act="sel" data-n="${i.n}" aria-label="Issue ${i.n}: ${esc(i.title)}">${i.n}</button>`; }).join('');
-  const issueRows = is.map((i) => `<div class="issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}" data-act="sel" data-n="${i.n}" style="cursor:pointer"><span class="tag">${i.severity} · ${i.cat}</span><h3 style="margin:.25em 0">${i.n}. ${esc(i.title)}</h3><p class="small" style="margin:.25em 0">${esc(i.description)}</p><p class="small" style="margin:.25em 0"><b>Fix:</b> ${esc(i.how_to_improve)}</p></div>`).join('');
+  const issueRows = is.map((i) => `<div class="issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}" data-act="sel" data-n="${i.n}"><div class="issue-top"><span class="sev-dot"></span><h3>${i.n}. ${esc(i.title)}</h3><span class="cat">${esc(i.cat)}</span><span class="pill">${sevLabel[i.severity]}</span></div><p class="issue-desc">${esc(i.description)}</p>${i.how_to_improve ? `<div class="fix-strip"><span class="fix-label">✦ Fix</span><span>${esc(i.how_to_improve)}</span></div>` : ''}</div>`).join('');
   const sc = scoreColor(r.overall.score);
   const tv = r.title_text ? titleVars(r.title_text) : null;
   const typoList = (r.typography_errors || []).filter((t) => t.error || t.detail || t.fix);
