@@ -6,29 +6,25 @@ const TYPES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'], MB =
 
 /* ---------- demo ---------- */
 const DEMO_SVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 800'><rect width='600' height='800' fill='#f4efe6'/><text x='60' y='300' font-size='84' font-weight='800' font-family='Arial' fill='#1f2a44'>SUMMER</text><text x='60' y='390' font-size='84' font-weight='800' font-family='Arial' fill='#1f2a44'>SALE</text><text x='60' y='450' font-size='26' font-family='Arial' fill='#e2d79c'>Up to 50% off everything in store</text><rect x='270' y='620' width='240' height='60' rx='8' fill='#c9b458'/><text x='300' y='658' font-size='22' font-family='Arial' fill='#fff'>Shop now</text><text x='60' y='775' font-size='11' font-family='Arial' fill='#999'>Terms and conditions apply. Offer valid while stocks lasts.</text></svg>";
-const iss = (title, severity, description, how, location) => ({ title, severity, description, how_to_improve: how, location });
 const DEMO = {
   design_type: 'Poster',
   title_text: 'SUMMER SALE',
-  overall: { score: 62, summary: 'A bold headline gives this poster a strong start, but low-contrast supporting text and a misaligned button weaken it.' },
-  categories: {
-    typography: { score: 70, issues: [] },
-    spacing: { score: 65, issues: [] },
-    alignment: { score: 55, issues: [iss('Button does not align with the text', 'important', 'The button starts further right than the headline and subtitle.', 'Move the button to the same left edge as the headline (or center everything).', { x: 45, y: 77, width: 40, height: 8 })] },
-    color: { score: 55, issues: [] },
-    readability: { score: 40, issues: [iss('Subtitle is nearly invisible', 'critical', 'Pale yellow text on a beige background has very low contrast.', 'Use a dark navy for the subtitle, or place it on a dark block.', { x: 9, y: 52, width: 62, height: 7 })] },
-    hierarchy: { score: 72, issues: [iss('Button blends into the background', 'important', 'The gold button with white text is weak compared with the headline.', 'Use a dark or strongly contrasting button with clear text.', { x: 45, y: 77, width: 40, height: 8 })] },
-    composition: { score: 68, issues: [] }
-  },
-  recommendations: ['Darken the subtitle so it is readable.', 'Align the button to the left edge shared by the text.', 'Make the button higher-contrast.', 'Enlarge the footer text so it can be read.'],
-  typography_errors: [
-    { error: 'Footer text too small', detail: 'The terms line is ~11px — too small to read at poster size.', fix: 'Use at least 14–16px for supporting text.' },
-    { error: 'Weak size hierarchy', detail: 'Subtitle and button text sizes are too close to each other.', fix: 'Use a clear size scale, e.g. 84 / 32 / 18 px.' }
+  overall: { score: 62, summary: 'Bold headline, strong start. Two things hold it back: the subtitle is nearly invisible, and the button breaks the left alignment.' },
+  scores: { typography: 70, spacing: 65, alignment: 55, color: 55, readability: 40, hierarchy: 72, composition: 68 },
+  works: [
+    { area: 'hierarchy', point: 'Headline lands instantly', why: 'Bold navy caps own the first read.' },
+    { area: 'color', point: 'Calm, limited palette', why: 'Cream, navy and gold keep it uncluttered.' },
+    { area: 'composition', point: 'Room to breathe', why: 'Generous space around the headline.' }
+  ],
+  changes: [
+    { area: 'readability', title: 'Subtitle is nearly invisible', severity: 'critical', action: 'Darken the subtitle to navy, or put it on a dark block.', location: { x: 9, y: 52, width: 62, height: 7 } },
+    { area: 'alignment', title: 'Button breaks left alignment', severity: 'important', action: 'Move the button to the headline\u2019s left edge.', location: { x: 45, y: 77, width: 40, height: 8 } },
+    { area: 'typography', title: 'Footer text too small', severity: 'minor', action: 'Raise the footer text to 14\u201316px.', location: { x: 9, y: 95, width: 72, height: 3 } }
   ]
 };
 
 /* ---------- helpers ---------- */
-const issues = (r) => { let a = []; for (const c of CATS) for (const i of r.categories[c]?.issues || []) a.push({ ...i, cat: c }); const o = { critical: 0, important: 1, minor: 2 }; return a.sort((x, y) => o[x.severity] - o[y.severity]).map((x, n) => ({ ...x, n: n + 1 })); };
+const numberChanges = (list) => { const o = { critical: 0, important: 1, minor: 2 }; return (list || []).slice().sort((x, y) => o[x.severity] - o[y.severity]).map((x, n) => ({ ...x, n: n + 1 })); };
 const readData = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
 const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 async function shrink(src, max, q) { const i = await loadImg(src), k = Math.min(1, max / Math.max(i.width, i.height)), c = document.createElement('canvas'); c.width = Math.round(i.width * k); c.height = Math.round(i.height * k); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(i, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', q); }
@@ -196,26 +192,24 @@ function home() {
 
 function analysis() {
   const r = S.result; if (!r) return `<p class="hero">No analysis yet. <a href="#home">Analyze a design</a>.</p>`;
-  const is = issues(r);
-  const marks = is.filter((i) => i.location).map((i) => { const l = i.location; return `<div class="box ${i.severity}" style="left:${l.x}%;top:${l.y}%;width:${l.width}%;height:${l.height}%;${S.sel === i.n ? '' : 'opacity:.35'}"></div><button class="mk ${i.severity}" style="left:${l.x}%;top:${l.y}%" data-act="sel" data-n="${i.n}" aria-label="Issue ${i.n}: ${esc(i.title)}">${i.n}</button>`; }).join('');
-  const issueRows = is.map((i) => `<div class="issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}" data-act="sel" data-n="${i.n}"><div class="issue-top"><span class="sev-dot"></span><h3>${i.n}. ${esc(i.title)}</h3><span class="cat">${esc(i.cat)}</span><span class="pill">${sevLabel[i.severity]}</span></div><p class="issue-desc">${esc(i.description)}</p>${i.how_to_improve ? `<div class="fix-strip"><span class="fix-label">✦ Fix</span><span>${esc(i.how_to_improve)}</span></div>` : ''}</div>`).join('');
+  const ch = numberChanges(r.changes);
+  const marks = ch.filter((i) => i.location).map((i) => { const l = i.location; return `<div class="box ${i.severity}" style="left:${l.x}%;top:${l.y}%;width:${l.width}%;height:${l.height}%;${S.sel === i.n ? '' : 'opacity:.35'}"></div><button class="mk ${i.severity}" style="left:${l.x}%;top:${l.y}%" data-act="sel" data-n="${i.n}" aria-label="Change ${i.n}: ${esc(i.title)}">${i.n}</button>`; }).join('');
+  const changeRows = ch.map((i) => `<div class="issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}" data-act="sel" data-n="${i.n}"><div class="issue-top"><span class="sev-dot"></span><h3>${i.n}. ${esc(i.title)}</h3><span class="cat">${esc(i.area)}</span><span class="pill">${sevLabel[i.severity]}</span></div>${i.action ? `<div class="fix-strip"><span class="fix-label">✦ Fix</span><span>${esc(i.action)}</span></div>` : ''}</div>`).join('');
+  const workRows = (r.works || []).map((w) => `<li class="ok"><span class="cat">${esc(w.area)}</span> <b>${esc(w.point)}</b>${w.why ? ` <span class="why" style="display:inline">— ${esc(w.why)}</span>` : ''}</li>`).join('') || '<li class="ok">Solid all round.</li>';
   const sc = scoreColor(r.overall.score);
   const tv = r.title_text ? titleVars(r.title_text) : null;
-  const typoList = (r.typography_errors || []).filter((t) => t.error || t.detail || t.fix);
 
-  return `<div class="dash"><div class="stage"><div class="card" style="text-align:center">${S.demo ? '<p class="mut small" style="margin:0 0 8px">Demo — sample data</p>' : ''}<div class="wrap"><img src="${S.src}" alt="The analyzed design with numbered issue markers">${marks}</div>${S.pdf ? '<p class="mut small">Issue markers are not available for PDFs.</p>' : ''}</div></div>
+  return `<div class="dash"><div class="stage"><div class="card" style="text-align:center">${S.demo ? '<p class="mut small" style="margin:0 0 8px">Demo — sample data</p>' : ''}<div class="wrap"><img src="${S.src}" alt="The analyzed design with numbered change markers">${marks}</div>${S.pdf ? '<p class="mut small">Issue markers are not available for PDFs.</p>' : ''}</div></div>
 <div>
 <div class="card">
   <div class="summary-header"><div class="big" style="color:${sc}">${r.overall.score}</div><div><div class="mut small">Overall Score</div><div style="font-weight:600;color:${sc}">${scoreLabel(r.overall.score)}${r.design_type ? ` · <span class="badge">${esc(r.design_type)}</span>` : ''}</div></div></div>
   <p style="margin:10px 0 0">${esc(r.overall.summary)}</p>
 
-  <div class="a-sec"><h3>Category Scores</h3><div class="scores">${CATS.map((c) => { const s = r.categories[c].score; return `<div class="sc"><b style="color:${scoreColor(s)}">${s}</b><span class="small mut">${c[0].toUpperCase() + c.slice(1)}</span></div>`; }).join('')}</div></div>
+  <div class="a-sec"><h3>📊 Category Scores</h3><div class="scores">${CATS.map((c) => { const s = r.scores?.[c] ?? 0; return `<div class="sc"><b style="color:${scoreColor(s)}">${s}</b><span class="small mut">${c[0].toUpperCase() + c.slice(1)}</span></div>`; }).join('')}</div></div>
 
-  <div class="a-sec"><h3>✅ Changes Required</h3><ul class="clean">${(r.recommendations || []).map((s) => `<li class="chg">${esc(s)}</li>`).join('') || '<li class="ok">No changes required — nice work!</li>'}</ul></div>
+  <div class="a-sec"><h3>✅ Works</h3><ul class="clean">${workRows}</ul></div>
 
-  <div class="a-sec"><h3>🔍 Issues</h3>${issueRows || '<p class="mut" style="margin:0">No issues found. Nice work!</p>'}</div>
-
-  ${typoList.length ? `<div class="a-sec"><h3>✒️ Typography Errors</h3><ul class="clean">${typoList.map((t) => `<li class="typo-item"><b>${esc(t.error)}</b>${t.detail ? ` <span class="mut">— ${esc(t.detail)}</span>` : ''}${t.fix ? `<br><span class="small">Fix: ${esc(t.fix)}</span>` : ''}</li>`).join('')}</ul></div>` : ''}
+  <div class="a-sec"><h3>🔧 Changes Required</h3>${changeRows || '<p class="ok" style="margin:0">Nothing to change — nice work!</p>'}</div>
 
   ${tv ? `<div class="a-sec"><h3>🔤 Title Variations</h3><div class="var-grid"><div class="var-card"><div class="lbl">UPPER CASE</div><div class="txt">${esc(tv.upper)}</div><button data-act="copy-var" data-var="upper">📋 Copy</button></div><div class="var-card"><div class="lbl">Sentence case</div><div class="txt">${esc(tv.sentence)}</div><button data-act="copy-var" data-var="sentence">📋 Copy</button></div><div class="var-card"><div class="lbl">Title Case (main words)</div><div class="txt">${esc(tv.title)}</div><button data-act="copy-var" data-var="title">📋 Copy</button></div></div></div>` : ''}
 </div>
@@ -231,7 +225,7 @@ function logoText(r) {
   if (r.works?.length) { t += 'WORKS\n'; r.works.forEach((x) => { t += `  - ${x.point} — ${x.why}\n`; }); t += '\n'; }
   if (r.fixes?.length) { t += 'FIX THESE\n'; r.fixes.forEach((x) => { t += `  [${x.priority.toUpperCase()}] ${x.point} — ${x.why}\n`; }); t += '\n'; }
   if (r.requirements?.length) { t += 'REQUIREMENTS\n'; r.requirements.forEach((q) => { const m = q.status === 'met' ? 'YES' : q.status === 'not_met' ? 'NO' : 'PARTIAL'; t += `  [${m}] ${q.requirement} — ${q.note}\n`; }); t += '\n'; }
-  t += 'VERDICT\n' + r.verdict.direction + '\n\nNEXT STEP\n' + r.verdict.next_step + '\n';
+  t += 'NEXT STEP\n' + r.next_step + '\n';
   return t;
 }
 
@@ -241,7 +235,7 @@ function logoView() {
   const reqRow = (q) => {
     const cls = q.status === 'met' ? 'yes' : q.status === 'not_met' ? 'no' : 'partial';
     const lbl = q.status === 'met' ? '✓ Met' : q.status === 'not_met' ? '✕ Not met' : '⚠ Partial';
-    return `<li style="margin:8px 0"><span class="chip ${cls}">${lbl}</span> <b>${esc(q.requirement)}</b>${q.note ? ` <span class="why" style="display:inline">${esc(q.note)}</span>` : ''}</li>`;
+    return `<li style="margin:8px 0"><span class="chip ${cls}">${lbl}</span> <b>${esc(q.requirement)}</b>${q.note ? ` <span class="why" style="display:inline">— ${esc(q.note)}</span>` : ''}</li>`;
   };
 
   return `<div class="dash"><div class="stage"><div class="card" style="text-align:center">${S.demo ? '<p class="mut small" style="margin:0 0 8px">Demo — sample data</p>' : ''}<div class="wrap"><img src="${S.src}" alt="The uploaded logo"></div></div></div>
@@ -255,11 +249,11 @@ function logoView() {
 
   ${(r.works || []).length ? `<div class="a-sec"><h3>✅ Works</h3><ul class="clean">${r.works.map((x) => `<li><b>${esc(x.point)}</b>${x.why ? ` <span class="why" style="display:inline">— ${esc(x.why)}</span>` : ''}</li>`).join('')}</ul></div>` : ''}
 
-  ${(r.fixes || []).length ? `<div class="a-sec"><h3>⚠️ Fix These</h3><ul class="clean">${r.fixes.map((x) => `<li class="warn"><b>${esc(x.point)}<span class="prio ${x.priority}">${x.priority === 'now' ? 'now' : 'later'}</span></b>${x.why ? ` <span class="why" style="display:inline">— ${esc(x.why)}</span>` : ''}</li>`).join('')}</ul></div>` : `<div class="a-sec"><h3>⚠️ Fix These</h3><p class="ok" style="margin:0">Nothing pressing — the logo is in good shape.</p></div>`}
+  ${(r.fixes || []).length ? `<div class="a-sec"><h3>🔧 Fix These</h3><ul class="clean">${r.fixes.map((x) => `<li class="warn"><b>${esc(x.point)}<span class="prio ${x.priority}">${x.priority === 'now' ? 'now' : 'later'}</span></b>${x.why ? ` <span class="why" style="display:inline">— ${esc(x.why)}</span>` : ''}</li>`).join('')}</ul></div>` : `<div class="a-sec"><h3>🔧 Fix These</h3><p class="ok" style="margin:0">Nothing pressing — the logo is in good shape.</p></div>`}
 
   ${(r.requirements || []).length ? `<div class="a-sec"><h3>🎯 Client Requirements</h3><ul class="clean" style="list-style:none">${r.requirements.map(reqRow).join('')}</ul></div>` : ''}
 
-  <div class="a-sec"><h3>💬 Verdict</h3><p style="margin:0 0 12px;font-size:15.5px;line-height:1.55">${esc(r.verdict?.direction) || '—'}</p><div class="kv next"><b>Suggested next design step</b><p style="margin:4px 0 0">${esc(r.verdict?.next_step) || '—'}</p></div></div>
+  ${r.next_step ? `<div class="kv next"><b>Suggested next design step</b><p style="margin:4px 0 0">${esc(r.next_step)}</p></div>` : ''}
 </div>
 <p class="row" style="justify-content:flex-start;margin-top:16px"><a class="btn pri" href="#home" data-act="new">🔍 Analyze another</a><button data-act="copy-review">📋 Copy Review</button></p>
 </div></div>`;
@@ -268,29 +262,25 @@ function logoView() {
 /* ---------- ad review view ---------- */
 function adView() {
   const r = S.result;
-  if (!r || !r.dimensions) return `<p class="hero">No ad review yet. <a href="#home">Analyze an ad</a>.</p>`;
-  const sevOrder = { critical: 0, important: 1, minor: 2 };
-  const is = (r.issues || []).slice().sort((x, y) => sevOrder[x.severity] - sevOrder[y.severity]).map((x, n) => ({ ...x, cat: x.area || 'general', n: n + 1 }));
-  const marks = is.filter((i) => i.location).map((i) => { const l = i.location; return `<div class="box ${i.severity}" style="left:${l.x}%;top:${l.y}%;width:${l.width}%;height:${l.height}%;${S.sel === i.n ? '' : 'opacity:.35'}"></div><button class="mk ${i.severity}" style="left:${l.x}%;top:${l.y}%" data-act="sel" data-n="${i.n}" aria-label="Issue ${i.n}: ${esc(i.title)}">${i.n}</button>`; }).join('');
-  const issueRows = is.map((i) => `<div class="issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}" data-act="sel" data-n="${i.n}"><div class="issue-top"><span class="sev-dot"></span><h3>${i.n}. ${esc(i.title)}</h3><span class="cat">${esc(i.cat)}</span><span class="pill">${sevLabel[i.severity]}</span></div><p class="issue-desc">${esc(i.description)}</p>${i.how_to_improve ? `<div class="fix-strip"><span class="fix-label">✦ Fix</span><span>${esc(i.how_to_improve)}</span></div>` : ''}</div>`).join('');
+  if (!r || !r.scores) return `<p class="hero">No ad review yet. <a href="#home">Analyze an ad</a>.</p>`;
+  const ch = numberChanges(r.changes);
+  const marks = ch.filter((i) => i.location).map((i) => { const l = i.location; return `<div class="box ${i.severity}" style="left:${l.x}%;top:${l.y}%;width:${l.width}%;height:${l.height}%;${S.sel === i.n ? '' : 'opacity:.35'}"></div><button class="mk ${i.severity}" style="left:${l.x}%;top:${l.y}%" data-act="sel" data-n="${i.n}" aria-label="Change ${i.n}: ${esc(i.title)}">${i.n}</button>`; }).join('');
+  const changeRows = ch.map((i) => `<div class="issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}" data-act="sel" data-n="${i.n}"><div class="issue-top"><span class="sev-dot"></span><h3>${i.n}. ${esc(i.title)}</h3><span class="cat">${esc(i.area)}</span><span class="pill">${sevLabel[i.severity]}</span></div>${i.action ? `<div class="fix-strip"><span class="fix-label">✦ Fix</span><span>${esc(i.action)}</span></div>` : ''}</div>`).join('');
+  const workRows = (r.works || []).map((w) => `<li class="ok"><span class="cat">${esc(w.area)}</span> <b>${esc(w.point)}</b>${w.why ? ` <span class="why" style="display:inline">— ${esc(w.why)}</span>` : ''}</li>`).join('') || '<li class="ok">Solid all round.</li>';
   const sc = scoreColor(r.overall.score);
   const dims = [['hook', '🪝 Hook'], ['hierarchy', '📐 Hierarchy'], ['cta', '🎯 CTA'], ['readability', '👁️ Readability'], ['impact', '⚡ Visual Impact']];
-  const dimRows = dims.map(([k, label]) => {
-    const d = r.dimensions[k]; if (!d) return '';
-    return `<div class="dim-row"><div class="dim-top"><h3 style="margin:0">${label}</h3><span class="dim-score" style="color:${scoreColor(d.score)}">${d.score}</span></div><p class="issue-desc" style="margin-top:4px">${esc(d.take)}</p>${d.fix ? `<p class="small" style="margin:6px 0 0"><b>→</b> ${esc(d.fix)}</p>` : ''}</div>`;
-  }).join('');
 
-  return `<div class="dash"><div class="stage"><div class="card" style="text-align:center">${S.demo ? '<p class="mut small" style="margin:0 0 8px">Demo — sample data</p>' : ''}<div class="wrap"><img src="${S.src}" alt="The analyzed ad creative with numbered issue markers">${marks}</div>${S.pdf ? '<p class="mut small">Issue markers are not available for PDFs.</p>' : ''}</div></div>
+  return `<div class="dash"><div class="stage"><div class="card" style="text-align:center">${S.demo ? '<p class="mut small" style="margin:0 0 8px">Demo — sample data</p>' : ''}<div class="wrap"><img src="${S.src}" alt="The analyzed ad creative with numbered change markers">${marks}</div>${S.pdf ? '<p class="mut small">Issue markers are not available for PDFs.</p>' : ''}</div></div>
 <div>
 <div class="card">
   <div class="summary-header"><div class="big" style="color:${sc}">${r.overall.score}</div><div><div class="mut small">Ad Score</div><div style="font-weight:600;color:${sc}">${scoreLabel(r.overall.score)}${r.ad_format ? ` · <span class="badge">${esc(r.ad_format)}</span>` : ''}</div></div></div>
   <p style="margin:10px 0 0">${esc(r.overall.summary)}</p>
 
-  <div class="a-sec"><h3>🎯 Ad Breakdown</h3>${dimRows}</div>
+  <div class="a-sec"><h3>📊 Ad Scores</h3><div class="scores">${dims.map(([k, label]) => { const s = r.scores?.[k] ?? 0; return `<div class="sc"><b style="color:${scoreColor(s)}">${s}</b><span class="small mut">${label}</span></div>`; }).join('')}</div></div>
 
-  <div class="a-sec"><h3>✅ Changes Required</h3><ul class="clean">${(r.changes || []).map((s) => `<li class="chg">${esc(s)}</li>`).join('') || '<li class="ok">No changes required — nice work!</li>'}</ul></div>
+  <div class="a-sec"><h3>✅ Works</h3><ul class="clean">${workRows}</ul></div>
 
-  <div class="a-sec"><h3>🔍 Issues</h3>${issueRows || '<p class="mut" style="margin:0">No issues found. Nice work!</p>'}</div>
+  <div class="a-sec"><h3>🔧 Changes Required</h3>${changeRows || '<p class="ok" style="margin:0">Nothing to change — nice work!</p>'}</div>
 </div>
 <p class="row" style="justify-content:flex-start;margin-top:16px"><a class="btn pri" href="#home" data-act="new">🔍 Analyze another</a></p>
 </div></div>`;

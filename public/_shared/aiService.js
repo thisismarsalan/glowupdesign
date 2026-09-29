@@ -1,61 +1,48 @@
 // AI provider layer — Gemini API (shared by Vercel serverless functions)
 const KB = require('../knowledge.js');
-const CATS = ['alignment', 'spacing', 'typography', 'color', 'readability', 'hierarchy', 'composition'];
+const CATS = ['typography', 'spacing', 'alignment', 'color', 'readability', 'hierarchy', 'composition'];
+const AREAS = [...CATS, 'general'];
 const clamp = (n, a, b) => Math.max(a, Math.min(b, Number.isFinite(+n) ? +n : a));
 const str = (v) => (typeof v === 'string' ? v : '');
 
-const SYSTEM = `You are GlowUp, an expert graphic design mentor. Critique the supplied design (image or PDF). Be specific and to the point.
+const POST_TEXT = 'Analyze this design fairly and objectively following the instructions. Remember: only real, visible problems count as issues. JSON only.';
 
-ANALYSIS STEPS (follow in order):
-STEP 1 — Identify the design type. Choose exactly ONE: "Poster", "Social Media Post", "UI/Web Design", "Logo", "Business Card", "Flyer", "Presentation Slide", "Infographic", "Packaging", "Banner", "Icon", "Other".
-STEP 2 — Apply critique criteria appropriate to THAT design type.
-STEP 3 — Check readability: contrast, font size, visual hierarchy.
-STEP 4 — Judge fairly. Good designs are common — when a design is well executed, score it high and find little or nothing wrong with it. Never give 0 unless the element is completely absent from the design.
+const NO_REPEAT = `CRITICAL — NO REPETITION:
+- Every point appears in EXACTLY ONE place.
+- What the work does WELL appears ONLY in "works".
+- Everything that should CHANGE appears ONLY in "changes".
+- "summary" is your overall verdict only — never restate items from works/changes there.
+- Different fields must always contain different points. Never say the same thing twice.
+
+TONE:
+- You think and speak like an experienced creative director: confident, human, specific. NOT like an AI or a computer.
+- No fluff, no filler, no generic advice. Short sentences with real reasoning behind them.`;
+
+const SYSTEM = `You are GlowUp — a creative director reviewing design work.
+
+${NO_REPEAT}
+
+ANALYSIS STEPS:
+1. Identify the design type. Choose exactly ONE: "Poster", "Social Media Post", "UI/Web Design", "Logo", "Business Card", "Flyer", "Presentation Slide", "Infographic", "Packaging", "Banner", "Icon", "Other".
+2. Critique for that type. Check readability: contrast, font size, visual hierarchy.
+3. Judge fairly. Good designs are common — score high and find little wrong when it deserves it. Never invent problems. Taste is not an issue. Never give 0 unless an element is completely absent.
 
 Reply with ONLY one JSON object, no markdown, in this EXACT shape:
 {
   "design_type": "Poster",
-  "title_text": "The exact main headline/title text of the design, copied EXACTLY as written. Empty string if none.",
-  "overall": {"score": 0-100, "summary": "2-3 sentences max"},
-  "categories": {
-    ${CATS.map((c) => `"${c}": {"score": 0-100, "issues": []}`).join(',\n    ')}
-  },
-  "recommendations": ["actionable change 1", "actionable change 2"],
-  "typography_errors": [
-    {"error": "Short error name", "detail": "What is wrong and where", "fix": "Exact fix"}
-  ]
+  "title_text": "the exact main headline text as written in the design, or empty string if none",
+  "overall": {"score": 0-100, "summary": "2-3 sentences: your verdict — what this design achieves, and the one most important thing to know"},
+  "scores": {"typography": 0-100, "spacing": 0-100, "alignment": 0-100, "color": 0-100, "readability": 0-100, "hierarchy": 0-100, "composition": 0-100},
+  "works": [{"area": "typography|spacing|alignment|color|readability|hierarchy|composition|general", "point": "max 10 words", "why": "max 15 words"}],
+  "changes": [{"area": "typography|spacing|alignment|color|readability|hierarchy|composition|general", "title": "max 6 words", "severity": "critical|important|minor", "action": "max 15 words — the exact change to make", "location": {"x": 0-100, "y": 0-100, "width": 0-100, "height": 0-100} OR null}]
 }
 
-Each issue object: {
-  "title": "Short descriptive title",
-  "severity": "critical|important|minor",
-  "description": "What the problem is (be specific)",
-  "how_to_improve": "Exact steps to fix",
-  "location": {"x": 0-100, "y": 0-100, "width": 0-100, "height": 0-100} OR null
-}
-
-FAIRNESS RULES (most important):
-- Your job is FAIR, balanced feedback — NOT fault-finding. Designers make good designs all the time.
-- ONLY report issues that are clearly, objectively visible and genuinely hurt the design (unreadable text, true misalignment, real contrast failure, typos, broken hierarchy, clearly cramped spacing). If you are not sure something is a real problem, leave it out.
-- NEVER report subjective taste as an issue (e.g. "could be more modern", "not exciting enough", "colors feel dated"). Taste is not an issue.
-- Empty issues lists are correct and COMMON. Most categories in most designs should have NO issues.
-- Maximum 6 issues TOTAL across all categories — only the ones that truly matter. Never invent or pad the list.
-- Use the full score range and do NOT cluster scores around 55-70: 90-100 excellent execution, 75-89 good with minor flaws, 60-74 decent with some real problems, 40-59 flawed, below 40 broken. A clean, competent design deserves 75+.
-- The summary MUST be balanced: first one sentence on what works well, then the main improvement. If the design is strong, say so plainly.
-
-CRITICAL RULES:
-- Coordinates are PERCENTAGES (x,y = top-left corner). Only provide coordinates if you are HIGHLY CONFIDENT. If unsure, use null.
-- To verify coordinates: imagine the image divided into a 10x10 grid. x=0 is left edge, x=100 is right edge, y=0 is top, y=100 is bottom.
-- Never name an exact font; say e.g. "appears to be a modern sans-serif".
-- Give HEX colors only as approximate values.
-- ALWAYS include real strengths inside the summary when the design deserves them.
-- Reserve "critical" for problems that seriously hurt readability or communication, never for taste.
-- Scores measure adherence to design principles, not artistic talent.
-- Be ACCURATE with severity: "critical" = broken, "important" = noticeably hurts quality, "minor" = small polish issue.
-- title_text: copy the main headline EXACTLY as written in the design (keep its original casing). If the design has no text at all, use an empty string.
-- recommendations: 3-6 of the MOST IMPACTFUL changes for THIS design, each one short actionable sentence, most important first.
-- typography_errors covers ONLY typography: font count, pairing, sizes, weights, line spacing, letter spacing, all-caps abuse, legibility of type. Every entry must be specific to THIS design. Not color or alignment.
-- Keep every string short and to the point. No filler.
+RULES:
+- works: 2-5 items — the genuine strengths, each with a short reason.
+- changes: 1-6 items — ONLY real, visible problems. severity: "critical" = broken, "important" = noticeably hurts, "minor" = polish.
+- location: PERCENTAGES (x,y = top-left corner). Only if HIGHLY CONFIDENT (imagine a 10x10 grid), else null.
+- Use the FULL score range — good work deserves 75+. Do not cluster around 55-70.
+- title_text: copy the headline EXACTLY as written (keep its casing). Empty string if the design has no text.
 
 Design type-specific criteria:
 - POSTERS: Impact, readability at distance, hierarchy, bold typography
@@ -69,8 +56,6 @@ Design type-specific criteria:
 
 Design principles to apply:
 ${KB.lessons.map((l) => `- ${l.title}: ${l.what} Common mistake: ${l.mistake} Good practice: ${l.good}`).join('\n')}`;
-
-const POST_TEXT = 'Analyze this design fairly and objectively following the instructions. Remember: only real, visible problems count as issues. JSON only.';
 
 async function callModel({ mime, data, system = SYSTEM, text = POST_TEXT, maxTokens = 12000, temperature = 0.4 }) {
   const ctrl = new AbortController();
@@ -113,46 +98,40 @@ async function callModel({ mime, data, system = SYSTEM, text = POST_TEXT, maxTok
   } finally { clearTimeout(t); }
 }
 
-function normalize(raw) {
+function jsonOf(raw) {
   const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
   if (s < 0 || e < 0) throw new Error('no json');
-  const j = JSON.parse(raw.slice(s, e + 1));
-  if (!j.categories || !j.overall) throw new Error('bad shape');
+  return JSON.parse(raw.slice(s, e + 1));
+}
+
+function locationOf(L) {
+  const ok = L && [L.x, L.y, L.width, L.height].every((n) => Number.isFinite(+n)) && +L.width > 0 && +L.height > 0;
+  return ok ? { x: clamp(L.x, 0, 100), y: clamp(L.y, 0, 100), width: clamp(L.width, 1, 100), height: clamp(L.height, 1, 100) } : null;
+}
+
+function normalize(raw) {
+  const j = jsonOf(raw);
   const list = (a) => (Array.isArray(a) ? a.map(str).filter(Boolean) : []);
   const out = {
     design_type: str(j.design_type) || 'Unknown',
     title_text: str(j.title_text),
-    overall: { score: clamp(j.overall.score, 0, 100), summary: str(j.overall.summary) },
-    categories: {},
-    recommendations: list(j.recommendations),
-    typography_errors: (Array.isArray(j.typography_errors) ? j.typography_errors : [])
-      .map((t) => ({ error: str(t.error), detail: str(t.detail), fix: str(t.fix) }))
-      .filter((t) => t.error || t.detail || t.fix)
+    overall: { score: clamp(j.overall?.score, 0, 100), summary: str(j.overall?.summary) },
+    scores: {},
+    works: (Array.isArray(j.works) ? j.works : [])
+      .map((w) => ({ area: AREAS.includes(w?.area) ? w.area : 'general', point: str(w?.point), why: str(w?.why) }))
+      .filter((w) => w.point),
+    changes: (Array.isArray(j.changes) ? j.changes : [])
+      .map((c) => ({
+        area: AREAS.includes(c?.area) ? c.area : 'general',
+        title: str(c?.title) || 'Change',
+        severity: ['critical', 'important', 'minor'].includes(c?.severity) ? c.severity : 'minor',
+        action: str(c?.action),
+        location: locationOf(c?.location)
+      }))
+      .filter((c) => c.title !== 'Change' || c.action)
+      .slice(0, 6)
   };
-  for (const c of CATS) {
-    const cat = j.categories[c] || {};
-    out.categories[c] = {
-      score: clamp(cat.score, 0, 100),
-      issues: (Array.isArray(cat.issues) ? cat.issues : []).map((i) => {
-        const L = i.location;
-        const ok = L && [L.x, L.y, L.width, L.height].every((n) => Number.isFinite(+n)) && +L.width > 0 && +L.height > 0;
-        return {
-          title: str(i.title) || 'Issue',
-          severity: ['critical', 'important', 'minor'].includes(i.severity) ? i.severity : 'minor',
-          description: str(i.description),
-          how_to_improve: str(i.how_to_improve),
-          location: ok ? { x: clamp(L.x, 0, 100), y: clamp(L.y, 0, 100), width: clamp(L.width, 1, 100), height: clamp(L.height, 1, 100) } : null
-        };
-      })
-    };
-  }
-  // Keep feedback honest: at most 6 issues total, most severe first
-  const sev = { critical: 0, important: 1, minor: 2 };
-  const flat = [];
-  for (const c of CATS) for (const i of out.categories[c].issues) flat.push(i);
-  flat.sort((x, y) => sev[x.severity] - sev[y.severity]);
-  const keep = new Set(flat.slice(0, 6));
-  for (const c of CATS) out.categories[c].issues = out.categories[c].issues.filter((i) => keep.has(i));
+  for (const c of CATS) out.scores[c] = clamp(j.scores?.[c], 0, 100);
   return out;
 }
 
@@ -160,7 +139,9 @@ exports.analyzeDesign = async (file) => normalize(await callModel(file));
 
 /* =====================  LOGO REVIEW (brand identity)  ===================== */
 
-const LOGO_SYSTEM = `You are a senior brand-identity designer giving a fellow designer a quick, honest review of their logo. Think and write like a human with sharp taste: react first, then cover only what matters. Plain, direct language — like a smart friend over coffee, NOT a formal critique document.
+const LOGO_SYSTEM = `You are GlowUp — a senior brand-identity designer and creative director reviewing a logo for a fellow designer. Quick, honest, human.
+
+${NO_REPEAT}
 
 INFORMATION FROM THE DESIGNER (business, audience, industry, personality, client requirements):
 """
@@ -169,35 +150,31 @@ INFORMATION FROM THE DESIGNER (business, audience, industry, personality, client
 If the information is empty, review as a standalone logo and add one short line about what context would sharpen the judgment.
 
 HOW TO LOOK AT THE IMAGE (important):
-- Study EVERYTHING visible in the image. Logo boards often show several items: the main logo lockup, the icon/symbol alone, the wordmark alone, color or layout variations (mono, inverted), and mockups. List EVERY visible item in "parts" and give each a one-line take. If it is a single logo, list its parts (icon, wordmark) instead.
+- Study EVERYTHING visible. Logo boards often show several items: the main logo lockup, the icon alone, the wordmark alone, color or layout variations, mockups. List EVERY visible item in "parts" with a one-line take. If it is a single logo, list its parts (icon, wordmark) instead. Part takes are per-item observations — do NOT repeat them in works or fixes.
 
 FAIRNESS:
-- Do NOT invent problems. Taste is not a flaw. If something works, say so and say keep it.
-- Good logos are common. The number of "fixes" must be honest (0-5). Zero fixes is a valid answer.
+- Do NOT invent problems. Taste is not a flaw. If something works, say so and say keep it. Good logos are common — fixes must be honest (0-5). Zero fixes is valid.
 
-HARD LENGTH RULES — this is a quick review, not a report:
-- quick_take: 2-3 sentences only.
-- every point: max 10 words. every why: max 15 words.
-- works: 2-4 items (fewer if honest). fixes: 0-5 items. parts: one line each.
-- verdict.direction: 2-3 sentences. verdict.next_step: one short sentence.
-- No filler. No text outside the JSON.
+HARD LENGTH RULES — quick review, not a report:
+- quick_take: 2-3 sentences. every point: max 10 words. every why: max 15 words.
+- parts: one line each. works: 2-4 (fewer if honest). fixes: 0-5.
+- next_step: one short sentence. No filler. No text outside the JSON.
 
 Reply with ONLY one JSON object in this EXACT shape:
 {
-  "quick_take": "2-3 sentences: honest first reaction — what this logo says, for whom, and whether it works",
+  "quick_take": "2-3 sentences: your overall call as a creative director — what it says, for whom, and whether it works",
   "parts": [{"name": "Main logo | Icon | Wordmark | Variation: mono | Mockup | ...", "take": "one line about this item"}],
   "works": [{"point": "max 10 words", "why": "max 15 words"}],
   "fixes": [{"point": "max 10 words", "why": "max 15 words", "priority": "now|later"}],
   "requirements": [{"requirement": "one requirement the designer stated", "status": "met|partial|not_met", "note": "max 12 words"}],
-  "verdict": {"direction": "2-3 sentences: the creative direction to take", "next_step": "one short sentence — the single next design step"}
+  "next_step": "one short sentence — the single next design step"
 }
 
 FIELD RULES:
 - requirements: ONLY requirements explicitly stated by the designer. If none, return [].
 - priority "now" = fix before shipping; "later" = refine when possible.
 - fixes must improve the EXISTING logo, not redesign it.
-- Fold design reasoning (business \u2192 audience \u2192 personality) into the short why's — never write long paragraphs.
-- If the image shows multiple items, also mention in quick_take whether the pieces feel consistent as one identity.`;
+- Fold design reasoning (business -> audience -> personality) into the short why's.`;
 
 function buildLogoSystem(brief) {
   const b = (brief || '').trim();
@@ -205,9 +182,7 @@ function buildLogoSystem(brief) {
 }
 
 function normalizeLogo(raw) {
-  const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
-  if (s < 0 || e < 0) throw new Error('no json');
-  const j = JSON.parse(raw.slice(s, e + 1));
+  const j = jsonOf(raw);
   const pairs = (a) => (Array.isArray(a) ? a.map((x) => ({ point: str(x?.point), why: str(x?.why) })).filter((x) => x.point) : []);
   return {
     quick_take: str(j.quick_take),
@@ -221,10 +196,7 @@ function normalizeLogo(raw) {
     requirements: (Array.isArray(j.requirements) ? j.requirements : [])
       .map((q) => ({ requirement: str(q?.requirement), status: ['met', 'partial', 'not_met'].includes(q?.status) ? q.status : 'partial', note: str(q?.note) }))
       .filter((q) => q.requirement),
-    verdict: {
-      direction: str(j.verdict?.direction),
-      next_step: str(j.verdict?.next_step)
-    }
+    next_step: str(j.next_step)
   };
 }
 
@@ -238,77 +210,67 @@ exports.analyzeLogo = async ({ file, brief }) => normalizeLogo(await callModel({
 
 /* =====================  AD CREATIVE REVIEW  ===================== */
 
-const AD_SYSTEM = `You are a senior creative strategist reviewing an AD CREATIVE — a sharp performance-creative director giving a fellow designer a quick, honest read. Human POV: react first, then the essentials. Plain, direct language.
+const AD_AREAS = ['hook', 'hierarchy', 'cta', 'readability', 'impact', 'general'];
+
+const AD_SYSTEM = `You are GlowUp — a senior performance-creative director reviewing an AD CREATIVE. Quick, honest, human read.
+
+${NO_REPEAT}
 
 WHAT TO JUDGE (in this order):
-1. HOOK — does it stop the scroll in 1-2 seconds? Is the first thing you see instantly clear and attention-earning (pattern interrupt, benefit, curiosity, bold visual)?
-2. HIERARCHY — what do you see first, second, third? Does the eye travel naturally toward the CTA? Is anything competing with the message?
-3. CTA — is there a clear call to action? Is it visible, high-contrast, obviously tappable, with action copy? Would a viewer know exactly what to do next?
-4. READABILITY — at feed size, can every piece of copy be read instantly? Font sizes, contrast, copy length, clutter.
-5. VISUAL IMPACT — thumb-stopping power: emotion, energy, contrast, brand feel. Would it be remembered 10 seconds later?
+1. HOOK — does it stop the scroll in 1-2 seconds? Is the first thing you see instantly clear and attention-earning?
+2. HIERARCHY — what do you see first, second, third? Does the eye travel naturally toward the CTA?
+3. CTA — is there a clear call to action? Visible, high-contrast, obviously tappable, with action copy?
+4. READABILITY — at feed size, can every piece of copy be read instantly?
+5. VISUAL IMPACT — thumb-stopping power: emotion, energy, contrast, brand feel. Memorable 10 seconds later?
 
 FAIRNESS:
-- Do NOT invent problems. Taste is not a flaw. Good ads are common — issues must be honest (0-5).
+- Do NOT invent problems. Taste is not a flaw. Good ads are common — issues must be honest.
 - Score across the FULL range: 90-100 excellent, 75-89 good with small flaws, 60-74 decent with real problems, below 60 meaningfully weak. Do not cluster.
 
 HARD LENGTH RULES — quick review, not a report:
-- overall.summary: 2-3 sentences.
-- every take and fix: max 15 words.
-- changes: 3-5 items, max 10 words each.
-- issues: 0-5 items; description and how_to_improve: max 20 words each.
+- summary: 2-3 sentences. every point: max 10 words. every why: max 15 words.
+- works: 2-4 items. changes: 1-5 items; title max 6 words, action max 15 words.
 - No filler. No text outside the JSON.
 
 Reply with ONLY one JSON object in this EXACT shape:
 {
   "ad_format": "what kind of ad this is (e.g. Instagram Feed Ad, Story Ad, Banner Ad, Print Ad, Outdoor)",
-  "overall": {"score": 0-100, "summary": "2-3 sentences: does this ad work, for whom, and why"},
-  "dimensions": {
-    "hook": {"score": 0-100, "take": "max 15 words", "fix": "max 15 words, or empty string if none"},
-    "hierarchy": {"score": 0-100, "take": "max 15 words", "fix": "max 15 words, or empty string"},
-    "cta": {"score": 0-100, "take": "max 15 words", "fix": "max 15 words, or empty string"},
-    "readability": {"score": 0-100, "take": "max 15 words", "fix": "max 15 words, or empty string"},
-    "impact": {"score": 0-100, "take": "max 15 words", "fix": "max 15 words, or empty string"}
-  },
-  "changes": ["max 10 words", "..."],
-  "issues": [{"title": "max 8 words", "severity": "critical|important|minor", "area": "hook|hierarchy|cta|readability|impact|general", "description": "max 20 words", "how_to_improve": "max 20 words", "location": {"x": 0-100, "y": 0-100, "width": 0-100, "height": 0-100} OR null}]
+  "overall": {"score": 0-100, "summary": "2-3 sentences: your verdict — does this ad work, for whom, and the one most important thing to know"},
+  "scores": {"hook": 0-100, "hierarchy": 0-100, "cta": 0-100, "readability": 0-100, "impact": 0-100},
+  "works": [{"area": "hook|hierarchy|cta|readability|impact|general", "point": "max 10 words", "why": "max 15 words"}],
+  "changes": [{"area": "hook|hierarchy|cta|readability|impact|general", "title": "max 6 words", "severity": "critical|important|minor", "action": "max 15 words — the exact change to make", "location": {"x": 0-100, "y": 0-100, "width": 0-100, "height": 0-100} OR null}]
 }
 
 RULES:
-- location coordinates are PERCENTAGES (x,y = top-left corner). Provide them only if HIGHLY CONFIDENT (imagine a 10x10 grid over the image), else null.
-- issues must point at real, visible problems (CTA too small, headline buried, text over busy background). Never taste-only complaints.
-- If the ad is strong: high scores, few issues, and say what works in the summary.
-- changes: most impactful improvements first.`;
+- location: PERCENTAGES (x,y = top-left). Only if HIGHLY CONFIDENT (10x10 grid), else null.
+- changes must point at real, visible problems. Never taste-only complaints.
+- If the ad is strong: high scores, few changes, and cover what works in "works".`;
 
 function normalizeAd(raw) {
-  const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
-  if (s < 0 || e < 0) throw new Error('no json');
-  const j = JSON.parse(raw.slice(s, e + 1));
-  const list = (a) => (Array.isArray(a) ? a.map(str).filter(Boolean) : []);
-  const dim = (x) => ({ score: clamp(x?.score, 0, 100), take: str(x?.take), fix: str(x?.fix) });
-  const areas = ['hook', 'hierarchy', 'cta', 'readability', 'impact', 'general'];
+  const j = jsonOf(raw);
   return {
     ad_format: str(j.ad_format) || 'Ad Creative',
     overall: { score: clamp(j.overall?.score, 0, 100), summary: str(j.overall?.summary) },
-    dimensions: {
-      hook: dim(j.dimensions?.hook),
-      hierarchy: dim(j.dimensions?.hierarchy),
-      cta: dim(j.dimensions?.cta),
-      readability: dim(j.dimensions?.readability),
-      impact: dim(j.dimensions?.impact)
+    scores: {
+      hook: clamp(j.scores?.hook, 0, 100),
+      hierarchy: clamp(j.scores?.hierarchy, 0, 100),
+      cta: clamp(j.scores?.cta, 0, 100),
+      readability: clamp(j.scores?.readability, 0, 100),
+      impact: clamp(j.scores?.impact, 0, 100)
     },
-    changes: list(j.changes),
-    issues: (Array.isArray(j.issues) ? j.issues : []).map((i) => {
-      const L = i.location;
-      const ok = L && [L.x, L.y, L.width, L.height].every((n) => Number.isFinite(+n)) && +L.width > 0 && +L.height > 0;
-      return {
-        title: str(i.title) || 'Issue',
-        severity: ['critical', 'important', 'minor'].includes(i.severity) ? i.severity : 'minor',
-        area: areas.includes(i.area) ? i.area : 'general',
-        description: str(i.description),
-        how_to_improve: str(i.how_to_improve),
-        location: ok ? { x: clamp(L.x, 0, 100), y: clamp(L.y, 0, 100), width: clamp(L.width, 1, 100), height: clamp(L.height, 1, 100) } : null
-      };
-    }).slice(0, 6)
+    works: (Array.isArray(j.works) ? j.works : [])
+      .map((w) => ({ area: AD_AREAS.includes(w?.area) ? w.area : 'general', point: str(w?.point), why: str(w?.why) }))
+      .filter((w) => w.point),
+    changes: (Array.isArray(j.changes) ? j.changes : [])
+      .map((c) => ({
+        area: AD_AREAS.includes(c?.area) ? c.area : 'general',
+        title: str(c?.title) || 'Change',
+        severity: ['critical', 'important', 'minor'].includes(c?.severity) ? c.severity : 'minor',
+        action: str(c?.action),
+        location: locationOf(c?.location)
+      }))
+      .filter((c) => c.title !== 'Change' || c.action)
+      .slice(0, 5)
   };
 }
 
