@@ -197,60 +197,44 @@ function analysis() {
 }
 
 /* ---------- logo review view ---------- */
+function logoText(r) {
+  let t = 'GLOWUP — LOGO REVIEW\n' + '='.repeat(40) + '\n\n';
+  t += 'QUICK TAKE\n' + r.quick_take + '\n\n';
+  if (r.parts?.length) { t += "WHAT'S IN THE IMAGE\n"; r.parts.forEach((p) => { t += `  - ${p.name}: ${p.take}\n`; }); t += '\n'; }
+  if (r.works?.length) { t += 'WORKS\n'; r.works.forEach((x) => { t += `  - ${x.point} — ${x.why}\n`; }); t += '\n'; }
+  if (r.fixes?.length) { t += 'FIX THESE\n'; r.fixes.forEach((x) => { t += `  [${x.priority.toUpperCase()}] ${x.point} — ${x.why}\n`; }); t += '\n'; }
+  if (r.requirements?.length) { t += 'REQUIREMENTS\n'; r.requirements.forEach((q) => { const m = q.status === 'met' ? 'YES' : q.status === 'not_met' ? 'NO' : 'PARTIAL'; t += `  [${m}] ${q.requirement} — ${q.note}\n`; }); t += '\n'; }
+  t += 'VERDICT\n' + r.verdict.direction + '\n\nNEXT STEP\n' + r.verdict.next_step + '\n';
+  return t;
+}
+
 function logoView() {
   const r = S.result;
-  if (!r || !r.breakdown) return `<p class="hero">No logo review yet. <a href="#home">Analyze a logo</a>.</p>`;
-  const bd = r.breakdown || {};
-  const why = (t) => t ? `<span class="why">${esc(t)}</span>` : '';
-  const pairList = (arr, cls) => (arr || []).map((p) => `<li class="${cls}"><b>${esc(p.point)}</b>${why(p.why)}</li>`).join('') || '<li class="ok">None — nice!</li>';
-  const bdItem = (label, x, extra) => (x && (x.verdict || x.notes)) ? `<div class="bd-item"><div class="bd-head"><h3 style="margin:0">${label}</h3>${x.verdict ? `<span class="verdict">${esc(x.verdict)}</span>` : ''}</div>${x.notes ? `<p class="issue-desc">${esc(x.notes)}</p>` : ''}${extra || ''}</div>` : '';
-  const sc = bd.scalability || {};
-  const scExtra = `${(sc.use_cases || []).length ? `<div class="chips">${sc.use_cases.map((u) => `<span class="chip ${u.works}" title="${esc(u.note)}">${u.works === 'yes' ? '✓' : u.works === 'no' ? '✕' : '⚠'} ${esc(u.where)}</span>`).join('')}</div>` : ''}${(sc.small_size_risks || []).length ? `<p class="small" style="margin:10px 0 0"><b>Risks when small:</b></p><ul class="clean">${sc.small_size_risks.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`;
-  const reqRows = (r.requirement_match || []).map((q) => {
+  if (!r || r.quick_take === undefined) return `<p class="hero">No logo review yet. <a href="#home">Analyze a logo</a>.</p>`;
+  const reqRow = (q) => {
     const cls = q.status === 'met' ? 'yes' : q.status === 'not_met' ? 'no' : 'partial';
     const lbl = q.status === 'met' ? '✓ Met' : q.status === 'not_met' ? '✕ Not met' : '⚠ Partial';
-    return `<li style="margin:10px 0"><span class="chip ${cls}">${lbl}</span> <b>${esc(q.requirement)}</b>${why(q.note)}</li>`;
-  }).join('');
-  const ideas = (r.improvements || []).map((x, i) => `<li class="chg"><b>${i + 1}. ${esc(x.idea)}</b>${why(x.why)}</li>`).join('') || '<li class="ok">The logo is working well — no changes needed.</li>';
-  const cd = r.creative_direction || {};
-  const cdList = (arr) => (arr || []).map((x) => `<li>${esc(x)}</li>`).join('') || '<li class="mut">—</li>';
+    return `<li style="margin:8px 0"><span class="chip ${cls}">${lbl}</span> <b>${esc(q.requirement)}</b>${q.note ? ` <span class="why" style="display:inline">${esc(q.note)}</span>` : ''}</li>`;
+  };
 
   return `<div class="dash"><div class="stage"><div class="card" style="text-align:center">${S.demo ? '<p class="mut small" style="margin:0 0 8px">Demo — sample data</p>' : ''}<div class="wrap"><img src="${S.src}" alt="The uploaded logo"></div></div></div>
 <div>
 <div class="card">
-  <div class="summary-header"><div class="big" style="background:linear-gradient(120deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent">✦</div><div><h2 style="margin:0">Logo Review</h2><div class="mut small">Brand identity analysis</div></div></div>
+  <div class="summary-header"><div class="big" style="background:linear-gradient(120deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent">✦</div><div><h2 style="margin:0">Logo Review</h2><div class="mut small">Quick honest take</div></div></div>
 
-  <div class="a-sec"><h3>🪪 Logo Overview</h3><p class="issue-desc" style="margin:0">${esc(r.overview) || '—'}</p></div>
+  <div class="a-sec"><h3>🪪 Quick Take</h3><p style="margin:0;font-size:15.5px;line-height:1.55">${esc(r.quick_take) || '—'}</p></div>
 
-  <div class="a-sec"><h3>✅ What Works</h3><ul class="clean">${pairList(r.what_works, 'ok')}</ul></div>
+  ${(r.parts || []).length ? `<div class="a-sec"><h3>🧩 What's in the Image</h3><ul class="clean">${r.parts.map((p) => `<li class="part-row"><b>${esc(p.name)}</b>${p.take ? ` <span class="why" style="display:inline">— ${esc(p.take)}</span>` : ''}</li>`).join('')}</ul></div>` : ''}
 
-  <div class="a-sec"><h3>⚠️ What Could Be Better</h3><p class="mut small" style="margin:-4px 0 8px">Potential improvements</p><ul class="clean">${pairList(r.what_could_be_better, 'warn')}</ul></div>
+  ${(r.works || []).length ? `<div class="a-sec"><h3>✅ Works</h3><ul class="clean">${r.works.map((x) => `<li><b>${esc(x.point)}</b>${x.why ? ` <span class="why" style="display:inline">— ${esc(x.why)}</span>` : ''}</li>`).join('')}</ul></div>` : ''}
 
-  <div class="a-sec"><h3>🔍 Design Breakdown</h3><p class="mut small" style="margin:-4px 0 4px">Objective observations</p>
-    ${bdItem('Typography', bd.typography)}
-    ${bdItem('Icon / Symbol', bd.icon_symbol)}
-    ${bdItem('Icon + Text Balance', bd.balance)}
-    ${bdItem('Colors', bd.colors)}
-    ${bdItem('Composition', bd.composition)}
-    ${bdItem('Scalability', bd.scalability, scExtra)}
-    ${bdItem('Uniqueness', bd.uniqueness)}
-    ${bdItem('Brand / Niche Fit', bd.brand_fit)}
-  </div>
+  ${(r.fixes || []).length ? `<div class="a-sec"><h3>⚠️ Fix These</h3><ul class="clean">${r.fixes.map((x) => `<li class="warn"><b>${esc(x.point)}<span class="prio ${x.priority}">${x.priority === 'now' ? 'now' : 'later'}</span></b>${x.why ? ` <span class="why" style="display:inline">— ${esc(x.why)}</span>` : ''}</li>`).join('')}</ul></div>` : `<div class="a-sec"><h3>⚠️ Fix These</h3><p class="ok" style="margin:0">Nothing pressing — the logo is in good shape.</p></div>`}
 
-  ${reqRows ? `<div class="a-sec"><h3>🎯 Client Requirement Matching</h3><ul class="clean" style="list-style:none">${reqRows}</ul></div>` : ''}
+  ${(r.requirements || []).length ? `<div class="a-sec"><h3>🎯 Client Requirements</h3><ul class="clean" style="list-style:none">${r.requirements.map(reqRow).join('')}</ul></div>` : ''}
 
-  <div class="a-sec"><h3>💡 Improvement Ideas</h3><p class="mut small" style="margin:-4px 0 8px">Creative suggestions — refine the existing logo, not redesign it</p><ul class="clean">${ideas}</ul></div>
-
-  <div class="a-sec"><h3>🎨 Creative Direction</h3><p class="issue-desc" style="margin:0 0 12px">${esc(cd.summary) || '—'}</p>
-    <div class="cd-grid">
-      <div class="kv keep"><b>What to keep</b><ul>${cdList(cd.keep)}</ul></div>
-      <div class="kv refine"><b>What to refine</b><ul>${cdList(cd.refine)}</ul></div>
-      <div class="kv reconsider"><b>What to reconsider</b><ul>${cdList(cd.reconsider)}</ul></div>
-    </div>
-    <div class="kv next"><b>Suggested next design step</b><p style="margin:4px 0 0">${esc(cd.next_step) || '—'}</p></div>
-  </div>
+  <div class="a-sec"><h3>💬 Verdict</h3><p style="margin:0 0 12px;font-size:15.5px;line-height:1.55">${esc(r.verdict?.direction) || '—'}</p><div class="kv next"><b>Suggested next design step</b><p style="margin:4px 0 0">${esc(r.verdict?.next_step) || '—'}</p></div></div>
 </div>
-<p class="row" style="justify-content:flex-start;margin-top:16px"><a class="btn pri" href="#home" data-act="new">🔍 Analyze another</a></p>
+<p class="row" style="justify-content:flex-start;margin-top:16px"><a class="btn pri" href="#home" data-act="new">🔍 Analyze another</a><button data-act="copy-review">📋 Copy Review</button></p>
 </div></div>`;
 }
 
@@ -268,6 +252,7 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]'); if (!b) return; const a = b.dataset.act, n = +b.dataset.n;
   if (a === 'analyze') analyze();
   else if (a === 'analyze-logo') analyzeLogo();
+  else if (a === 'copy-review') { if (S.result) navigator.clipboard.writeText(logoText(S.result)).then(() => { b.textContent = '✅ Copied!'; setTimeout(() => { b.textContent = '📋 Copy Review'; }, 1500); }).catch(() => {}); }
   else if (a === 'mode') { S.mode = b.dataset.mode || null; S.err = ''; render(); }
   else if (a === 'remove') { S.file = S.src = null; S.err = ''; S.mode = null; S.brief = ''; render(); }
   else if (a === 'new') { S.file = S.src = null; S.result = null; S.mode = null; S.brief = ''; }
