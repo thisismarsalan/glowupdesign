@@ -129,7 +129,7 @@ function home() {
   const demoRow = `<div class="row"><button data-act="demo">🎨 Try a sample design</button></div>`;
   const priv = `<p class="mut small" style="text-align:center">🔒 Your design is used only for analysis and is not saved.</p>`;
   const thumb = S.pdf ? `<p class="mut" style="text-align:center">📄 PDF selected (preview not available)</p>` : `<img src="${S.src}" alt="Preview of your uploaded design">`;
-  const nameLine = `<p style="text-align:center;margin:0"><b>${esc(S.file.name)}</b> · <span class="mut">${(S.file.size / MB).toFixed(2)} MB</span></p>`;
+  const nameLine = S.file ? `<p style="text-align:center;margin:0"><b>${esc(S.file.name)}</b> · <span class="mut">${(S.file.size / MB).toFixed(2)} MB</span></p>` : '';
 
   if (!S.src) {
     return `${hero}<label class="drop" id="drop"><input type="file" accept=".png,.jpg,.jpeg,.webp,.pdf" data-file><b style="font-size:18px">Drag &amp; drop your design here</b><p class="mut">PNG • JPG • WEBP • PDF · up to 10 MB</p><span class="btn pri">Choose a file</span></label>${err}${demoRow}${priv}`;
