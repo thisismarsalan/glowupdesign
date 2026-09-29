@@ -70,7 +70,9 @@ Design type-specific criteria:
 Design principles to apply:
 ${KB.lessons.map((l) => `- ${l.title}: ${l.what} Common mistake: ${l.mistake} Good practice: ${l.good}`).join('\n')}`;
 
-async function callModel({ mime, data }) {
+const POST_TEXT = 'Analyze this design fairly and objectively following the instructions. Remember: only real, visible problems count as issues. JSON only.';
+
+async function callModel({ mime, data, system = SYSTEM, text = POST_TEXT, maxTokens = 12000, temperature = 0.4 }) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 55000);
   try {
@@ -80,7 +82,7 @@ async function callModel({ mime, data }) {
 
     const parts = [
       { inline_data: { mime_type: mime, data: data } },
-      { text: 'Analyze this design fairly and objectively following the instructions. Remember: only real, visible problems count as issues. JSON only.' }
+      { text }
     ];
 
     const res = await fetch(url, {
@@ -89,10 +91,10 @@ async function callModel({ mime, data }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts }],
-        systemInstruction: { parts: [{ text: SYSTEM }] },
+        systemInstruction: { parts: [{ text: system }] },
         generationConfig: {
-          maxOutputTokens: 12000,
-          temperature: 0.4,
+          maxOutputTokens: maxTokens,
+          temperature,
           responseMimeType: 'application/json',
         }
       }),
@@ -155,3 +157,115 @@ function normalize(raw) {
 }
 
 exports.analyzeDesign = async (file) => normalize(await callModel(file));
+
+/* =====================  LOGO REVIEW (brand identity)  ===================== */
+
+const LOGO_SYSTEM = `You are GlowUp's brand identity reviewer — an experienced brand identity designer and creative director reviewing a logo for a client. Think like a senior creative director, not a describer.
+
+THINKING FRAMEWORK (always connect these):
+business → audience → industry → brand personality → visual communication.
+Every important observation must explain the design REASONING behind it: how a visual decision helps or hurts the brand's communication. NEVER give generic statements like "looks good", "make it pop", "use better colors".
+
+INFORMATION FROM THE DESIGNER ABOUT THE LOGO / BUSINESS / CLIENT:
+"""
+{{BRIEF}}
+"""
+If the information above is empty, evaluate the logo as a standalone identity and say explicitly where client context would sharpen the judgment.
+
+FAIRNESS (most important):
+- Do NOT automatically assume the logo needs to change. If an element already works well, explain WHY it works and recommend keeping it.
+- Only report weaknesses that are real and consequential for the brand. Never invent problems. Never report pure taste as a flaw.
+- Good identity work is common. Be honest and specific in both directions.
+
+Reply with ONLY one JSON object, no markdown, in this EXACT shape:
+{
+  "overview": "2-4 sentences: what this logo currently communicates — the brand personality it projects, who it appears to be for, and the identity it suggests",
+  "what_works": [{"point": "short strength", "why": "design reasoning why it works for this brand"}],
+  "what_could_be_better": [{"point": "short weakness", "why": "design reasoning why it hurts the brand"}],
+  "breakdown": {
+    "typography": {"verdict": "2-4 words", "notes": "objective observation + reasoning: is the typeface right for the business and its personality, is it readable, is the weight right (modern/premium/friendly/bold/technical vs the brand), is spacing and alignment right"},
+    "icon_symbol": {"verdict": "2-4 words", "notes": "objective observation + reasoning: does the icon communicate something relevant about the business, is the concept understandable, does it support the name, is it too generic/confusing/complicated/unrelated, is it unique and memorable, does it work independently from the wordmark"},
+    "balance": {"verdict": "2-4 words", "notes": "objective observation + reasoning: visual balance between icon and text, is one overpowering the other, are sizes proportionate, is the spacing between them right, does the lockup feel unified"},
+    "colors": {"verdict": "2-4 words", "notes": "objective observation + reasoning: fit with industry and personality, harmony of the combination, any color too bright/dark/dominant/weak, contrast, feeling communicated, digital + print viability, does it survive monochrome/grayscale"},
+    "composition": {"verdict": "2-4 words", "notes": "objective observation + reasoning: overall balance, proportions between elements, unnecessary visual weight or empty space, stability, alignment and spacing"},
+    "scalability": {"verdict": "2-4 words", "notes": "objective observation + reasoning: how the mark behaves when it is reduced", "use_cases": [{"where": "Website", "works": "yes|partial|no", "note": "one short reason"}], "small_size_risks": ["an element that becomes unclear or unreadable when small"]},
+    "uniqueness": {"verdict": "2-4 words", "notes": "objective observation + reasoning: distinctiveness, similarity to overused industry styles, memorability, potential to grow into a recognizable identity"},
+    "brand_fit": {"verdict": "2-4 words", "notes": "objective observation + reasoning: fit with the business and industry, personality match, appropriateness for the target audience, professionalism and niche relevance"}
+  },
+  "requirement_match": [{"requirement": "one specific client requirement from the designer information", "status": "met|partial|not_met", "note": "how the logo addresses it or misses it"}],
+  "improvements": [{"idea": "practical, specific improvement to the EXISTING logo", "why": "why it would improve this logo for this brand"}],
+  "creative_direction": {
+    "summary": "concise recommended creative direction for the logo",
+    "keep": ["element to keep, and why"],
+    "refine": ["element to refine, and how/why"],
+    "reconsider": ["element to reconsider, and why"],
+    "next_step": "the single suggested next design step"
+  }
+}
+
+FIELD RULES:
+- breakdown.scalability.use_cases MUST include exactly these 8: "Website", "Social media", "Business cards", "Packaging", "Signage", "App/profile icon", "Documents", "Small-size use". works: "yes" = holds up, "partial" = works with caveats, "no" = breaks down.
+- requirement_match: ONLY requirements explicitly stated by the designer. If none were stated, return an empty list.
+- improvements: 2-5 ideas that improve the EXISTING logo — not a full redesign. Every idea must say why.
+- Distinguish clearly: breakdown.notes = objective observations; what_could_be_better = potential improvements; improvements = creative suggestions.
+- If the logo is wordmark-only or symbol-only, say so and skip what does not apply inside that field's notes.
+- Keep every string specific to THIS logo and THIS brand. No filler.`;
+
+function buildLogoSystem(brief) {
+  const b = (brief || '').trim();
+  return LOGO_SYSTEM.replace('{{BRIEF}}', b || '(no additional context provided)');
+}
+
+function normalizeLogo(raw) {
+  const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+  if (s < 0 || e < 0) throw new Error('no json');
+  const j = JSON.parse(raw.slice(s, e + 1));
+  const list = (a) => (Array.isArray(a) ? a.map(str).filter(Boolean) : []);
+  const pairs = (a) => (Array.isArray(a) ? a.map((x) => ({ point: str(x?.point), why: str(x?.why) })).filter((x) => x.point) : []);
+  const bd = (x) => ({ verdict: str(x?.verdict), notes: str(x?.notes) });
+  const sc = j.breakdown?.scalability || {};
+  const works = (w) => (['yes', 'partial', 'no'].includes(w) ? w : 'partial');
+  return {
+    overview: str(j.overview),
+    what_works: pairs(j.what_works),
+    what_could_be_better: pairs(j.what_could_be_better),
+    breakdown: {
+      typography: bd(j.breakdown?.typography),
+      icon_symbol: bd(j.breakdown?.icon_symbol),
+      balance: bd(j.breakdown?.balance),
+      colors: bd(j.breakdown?.colors),
+      composition: bd(j.breakdown?.composition),
+      scalability: {
+        verdict: str(sc.verdict),
+        notes: str(sc.notes),
+        use_cases: (Array.isArray(sc.use_cases) ? sc.use_cases : [])
+          .map((u) => ({ where: str(u?.where), works: works(u?.works), note: str(u?.note) }))
+          .filter((u) => u.where),
+        small_size_risks: list(sc.small_size_risks)
+      },
+      uniqueness: bd(j.breakdown?.uniqueness),
+      brand_fit: bd(j.breakdown?.brand_fit)
+    },
+    requirement_match: (Array.isArray(j.requirement_match) ? j.requirement_match : [])
+      .map((q) => ({ requirement: str(q?.requirement), status: ['met', 'partial', 'not_met'].includes(q?.status) ? q.status : 'partial', note: str(q?.note) }))
+      .filter((q) => q.requirement),
+    improvements: (Array.isArray(j.improvements) ? j.improvements : [])
+      .map((x) => ({ idea: str(x?.idea), why: str(x?.why) }))
+      .filter((x) => x.idea),
+    creative_direction: {
+      summary: str(j.creative_direction?.summary),
+      keep: list(j.creative_direction?.keep),
+      refine: list(j.creative_direction?.refine),
+      reconsider: list(j.creative_direction?.reconsider),
+      next_step: str(j.creative_direction?.next_step)
+    }
+  };
+}
+
+exports.analyzeLogo = async ({ file, brief }) => normalizeLogo(await callModel({
+  ...file,
+  system: buildLogoSystem(brief),
+  text: 'Review this logo as a brand identity creative director, following all instructions. JSON only.',
+  maxTokens: 14000,
+  temperature: 0.4
+}));
