@@ -18,9 +18,17 @@ TONE:
 - You think and speak like an experienced creative director: confident, human, specific. NOT like an AI or a computer.
 - No fluff, no filler, no generic advice. Short sentences with real reasoning behind them.`;
 
+const STATIC_RULE = `STATIC MEDIUM RULE (critical):
+- You are reviewing a STATIC artwork — one fixed image. Most ads and designs are static; assume STATIC always.
+- NEVER suggest interactivity: no "clickable", "interactive", "tappable", "hover", "link", "animation", "video", "carousel". These do not exist in this medium. The ad platform may add click behavior later — that is not your concern.
+- A "button" or "CTA" here is a VISUAL element in the artwork (a button-shaped block, a promo code badge, directive text). Judge it as an image: its size, contrast, placement, and wording — NEVER its clickability.
+- Every suggested change must be doable inside the static artwork: recolor, resize, reposition, retype, or add/remove visual elements.`;
+
 const SYSTEM = `You are GlowUp — a creative director reviewing design work.
 
 ${NO_REPEAT}
+
+${STATIC_RULE}
 
 ANALYSIS STEPS:
 1. Identify the design type. Choose exactly ONE: "Poster", "Social Media Post", "UI/Web Design", "Logo", "Business Card", "Flyer", "Presentation Slide", "Infographic", "Packaging", "Banner", "Icon", "Other".
@@ -118,14 +126,14 @@ function normalize(raw) {
     overall: { score: clamp(j.overall?.score, 0, 100), summary: str(j.overall?.summary) },
     scores: {},
     works: (Array.isArray(j.works) ? j.works : [])
-      .map((w) => ({ area: AREAS.includes(w?.area) ? w.area : 'general', point: str(w?.point), why: str(w?.why) }))
+      .map((w) => ({ area: AREAS.includes(w?.area) ? w.area : 'general', point: staticSafe(str(w?.point)), why: staticSafe(str(w?.why)) }))
       .filter((w) => w.point),
     changes: (Array.isArray(j.changes) ? j.changes : [])
       .map((c) => ({
         area: AREAS.includes(c?.area) ? c.area : 'general',
-        title: str(c?.title) || 'Change',
+        title: staticSafe(str(c?.title) || 'Change'),
         severity: ['critical', 'important', 'minor'].includes(c?.severity) ? c.severity : 'minor',
-        action: str(c?.action),
+        action: staticSafe(str(c?.action)),
         location: locationOf(c?.location)
       }))
       .filter((c) => c.title !== 'Change' || c.action)
@@ -212,14 +220,22 @@ exports.analyzeLogo = async ({ file, brief }) => normalizeLogo(await callModel({
 
 const AD_AREAS = ['hook', 'hierarchy', 'cta', 'readability', 'impact', 'general'];
 
+// Safety net: strip any residual interactivity advice — impossible in a static artwork
+const staticSafe = (s) => String(s || '')
+  .replace(/\b(clickable|interactive|tappable)\s+(button|cta|element|banner|block|badge)\b/gi, '$2-style visual element')
+  .replace(/\bmake (it |them )?(more )?clickable\b/gi, 'make it read clearly as a button')
+  .replace(/\b(add|include|use)\s+a\s+(clickable\s+|interactive\s+)?link\b/gi, '$1 a clear visual directive');
+
 const AD_SYSTEM = `You are GlowUp — a senior performance-creative director reviewing an AD CREATIVE. Quick, honest, human read.
 
 ${NO_REPEAT}
 
+${STATIC_RULE}
+
 WHAT TO JUDGE (in this order):
 1. HOOK — does it stop the scroll in 1-2 seconds? Is the first thing you see instantly clear and attention-earning?
 2. HIERARCHY — what do you see first, second, third? Does the eye travel naturally toward the CTA?
-3. CTA — is there a clear call to action? Visible, high-contrast, obviously tappable, with action copy?
+3. CTA — is there a clear call to action as a VISUAL element (button graphic, promo code badge, directive copy)? Is it prominent, high-contrast, well placed, with action words? Judge only the artwork — NEVER comment on clickability (this is a static image).
 4. READABILITY — at feed size, can every piece of copy be read instantly?
 5. VISUAL IMPACT — thumb-stopping power: emotion, energy, contrast, brand feel. Memorable 10 seconds later?
 
@@ -259,14 +275,14 @@ function normalizeAd(raw) {
       impact: clamp(j.scores?.impact, 0, 100)
     },
     works: (Array.isArray(j.works) ? j.works : [])
-      .map((w) => ({ area: AD_AREAS.includes(w?.area) ? w.area : 'general', point: str(w?.point), why: str(w?.why) }))
+      .map((w) => ({ area: AD_AREAS.includes(w?.area) ? w.area : 'general', point: staticSafe(str(w?.point)), why: staticSafe(str(w?.why)) }))
       .filter((w) => w.point),
     changes: (Array.isArray(j.changes) ? j.changes : [])
       .map((c) => ({
         area: AD_AREAS.includes(c?.area) ? c.area : 'general',
-        title: str(c?.title) || 'Change',
+        title: staticSafe(str(c?.title) || 'Change'),
         severity: ['critical', 'important', 'minor'].includes(c?.severity) ? c.severity : 'minor',
-        action: str(c?.action),
+        action: staticSafe(str(c?.action)),
         location: locationOf(c?.location)
       }))
       .filter((c) => c.title !== 'Change' || c.action)
