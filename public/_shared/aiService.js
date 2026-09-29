@@ -235,3 +235,87 @@ exports.analyzeLogo = async ({ file, brief }) => normalizeLogo(await callModel({
   maxTokens: 6000,
   temperature: 0.5
 }));
+
+/* =====================  AD CREATIVE REVIEW  ===================== */
+
+const AD_SYSTEM = `You are a senior creative strategist reviewing an AD CREATIVE — a sharp performance-creative director giving a fellow designer a quick, honest read. Human POV: react first, then the essentials. Plain, direct language.
+
+WHAT TO JUDGE (in this order):
+1. HOOK — does it stop the scroll in 1-2 seconds? Is the first thing you see instantly clear and attention-earning (pattern interrupt, benefit, curiosity, bold visual)?
+2. HIERARCHY — what do you see first, second, third? Does the eye travel naturally toward the CTA? Is anything competing with the message?
+3. CTA — is there a clear call to action? Is it visible, high-contrast, obviously tappable, with action copy? Would a viewer know exactly what to do next?
+4. READABILITY — at feed size, can every piece of copy be read instantly? Font sizes, contrast, copy length, clutter.
+5. VISUAL IMPACT — thumb-stopping power: emotion, energy, contrast, brand feel. Would it be remembered 10 seconds later?
+
+FAIRNESS:
+- Do NOT invent problems. Taste is not a flaw. Good ads are common — issues must be honest (0-5).
+- Score across the FULL range: 90-100 excellent, 75-89 good with small flaws, 60-74 decent with real problems, below 60 meaningfully weak. Do not cluster.
+
+HARD LENGTH RULES — quick review, not a report:
+- overall.summary: 2-3 sentences.
+- every take and fix: max 15 words.
+- changes: 3-5 items, max 10 words each.
+- issues: 0-5 items; description and how_to_improve: max 20 words each.
+- No filler. No text outside the JSON.
+
+Reply with ONLY one JSON object in this EXACT shape:
+{
+  "ad_format": "what kind of ad this is (e.g. Instagram Feed Ad, Story Ad, Banner Ad, Print Ad, Outdoor)",
+  "overall": {"score": 0-100, "summary": "2-3 sentences: does this ad work, for whom, and why"},
+  "dimensions": {
+    "hook": {"score": 0-100, "take": "max 15 words", "fix": "max 15 words, or empty string if none"},
+    "hierarchy": {"score": 0-100, "take": "max 15 words", "fix": "max 15 words, or empty string"},
+    "cta": {"score": 0-100, "take": "max 15 words", "fix": "max 15 words, or empty string"},
+    "readability": {"score": 0-100, "take": "max 15 words", "fix": "max 15 words, or empty string"},
+    "impact": {"score": 0-100, "take": "max 15 words", "fix": "max 15 words, or empty string"}
+  },
+  "changes": ["max 10 words", "..."],
+  "issues": [{"title": "max 8 words", "severity": "critical|important|minor", "area": "hook|hierarchy|cta|readability|impact|general", "description": "max 20 words", "how_to_improve": "max 20 words", "location": {"x": 0-100, "y": 0-100, "width": 0-100, "height": 0-100} OR null}]
+}
+
+RULES:
+- location coordinates are PERCENTAGES (x,y = top-left corner). Provide them only if HIGHLY CONFIDENT (imagine a 10x10 grid over the image), else null.
+- issues must point at real, visible problems (CTA too small, headline buried, text over busy background). Never taste-only complaints.
+- If the ad is strong: high scores, few issues, and say what works in the summary.
+- changes: most impactful improvements first.`;
+
+function normalizeAd(raw) {
+  const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+  if (s < 0 || e < 0) throw new Error('no json');
+  const j = JSON.parse(raw.slice(s, e + 1));
+  const list = (a) => (Array.isArray(a) ? a.map(str).filter(Boolean) : []);
+  const dim = (x) => ({ score: clamp(x?.score, 0, 100), take: str(x?.take), fix: str(x?.fix) });
+  const areas = ['hook', 'hierarchy', 'cta', 'readability', 'impact', 'general'];
+  return {
+    ad_format: str(j.ad_format) || 'Ad Creative',
+    overall: { score: clamp(j.overall?.score, 0, 100), summary: str(j.overall?.summary) },
+    dimensions: {
+      hook: dim(j.dimensions?.hook),
+      hierarchy: dim(j.dimensions?.hierarchy),
+      cta: dim(j.dimensions?.cta),
+      readability: dim(j.dimensions?.readability),
+      impact: dim(j.dimensions?.impact)
+    },
+    changes: list(j.changes),
+    issues: (Array.isArray(j.issues) ? j.issues : []).map((i) => {
+      const L = i.location;
+      const ok = L && [L.x, L.y, L.width, L.height].every((n) => Number.isFinite(+n)) && +L.width > 0 && +L.height > 0;
+      return {
+        title: str(i.title) || 'Issue',
+        severity: ['critical', 'important', 'minor'].includes(i.severity) ? i.severity : 'minor',
+        area: areas.includes(i.area) ? i.area : 'general',
+        description: str(i.description),
+        how_to_improve: str(i.how_to_improve),
+        location: ok ? { x: clamp(L.x, 0, 100), y: clamp(L.y, 0, 100), width: clamp(L.width, 1, 100), height: clamp(L.height, 1, 100) } : null
+      };
+    }).slice(0, 6)
+  };
+}
+
+exports.analyzeAd = async (file) => normalizeAd(await callModel({
+  ...file,
+  system: AD_SYSTEM,
+  text: 'Review this ad creative now. JSON only.',
+  maxTokens: 7000,
+  temperature: 0.5
+}));

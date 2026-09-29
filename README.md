@@ -3,6 +3,7 @@
 Upload a design and get a clear, to-the-point AI critique. No build step: a static site (`public/`) plus one secure Vercel serverless function (`api/`).
 
 ## What you get
+- 📢 **Ad Creative Review** — Hook, hierarchy, CTA, readability and visual impact with issue markers
 - ✦ **Logo Review** — Brand-identity analysis: fit, typography, icon, balance, color, scalability, uniqueness, requirement matching and creative direction
 - 📋 **Summary & Score** — Overall verdict at the top, with a 0–100 score
 - 📐 **Category Scores** — Typography, Spacing, Alignment, Color, Readability, Hierarchy, Composition

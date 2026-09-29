@@ -1,5 +1,5 @@
 // GlowUp /api/analyze — Vercel serverless adapter (repo-root api/ variant)
-const { analyzeDesign, analyzeLogo } = require('../public/_shared/aiService');
+const { analyzeDesign, analyzeLogo, analyzeAd } = require('../public/_shared/aiService');
 
 const MAGIC = { 'image/jpeg': [0xff, 0xd8], 'image/png': [0x89, 0x50], 'image/webp': [0x52, 0x49], 'application/pdf': [0x25, 0x50] };
 const MAX = 10 * 1024 * 1024;
@@ -27,6 +27,7 @@ module.exports = async (req, res) => {
       const brief = typeof body.brief === 'string' ? body.brief.slice(0, 2000) : '';
       return R(200, await analyzeLogo({ file, brief }));
     }
+    if (body.type === 'ad') return R(200, await analyzeAd(file));
     return R(200, await analyzeDesign(file));
   } catch (err) {
     console.error('analyze failed:', err && err.message);

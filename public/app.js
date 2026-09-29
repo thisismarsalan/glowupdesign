@@ -99,6 +99,23 @@ async function analyze() {
   } finally { clearInterval(timer); clearTimeout(to); render(); }
 }
 
+async function analyzeAd() {
+  if (!S.src) return;
+  S.busy = true; S.err = ''; S.stage = 0; render();
+  const timer = setInterval(() => { S.stage = Math.min(S.stage + 1, 3); render(); }, 2500);
+  const ctrl = new AbortController(), to = setTimeout(() => ctrl.abort(), 120000);
+  try {
+    const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify({ image: S.src, type: 'ad' }) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || 'Something went wrong while analyzing your ad. Please try again.');
+    S.result = j; S.demo = false; S.sel = null;
+    S.busy = false; clearInterval(timer); go('ad'); render();
+  } catch (e) {
+    S.err = e.name === 'AbortError' ? 'The analysis took too long. Try a smaller image or try again.' : (e instanceof TypeError ? 'Network problem. Check your connection and try again.' : e.message);
+    S.busy = false;
+  } finally { clearInterval(timer); clearTimeout(to); render(); }
+}
+
 async function analyzeLogo() {
   if (!S.src) return;
   if (!S.brief.trim()) { S.err = 'Please tell us what you designed — even one line helps.'; return render(); }
@@ -120,9 +137,10 @@ async function analyzeLogo() {
 /* ---------- views ---------- */
 function home() {
   if (S.busy) {
-    const isLogo = S.mode === 'logo';
-    const st = isLogo ? ['Reading your logo', 'Studying brand context', 'Reviewing typography, icon & color', 'Preparing creative direction'] : ['Reading your design', 'Checking typography & layout', 'Scoring categories', 'Preparing feedback'];
-    return `<div class="load card" role="status" aria-live="polite"><div class="spin"></div><h2 style="margin-top:0">${isLogo ? 'Analyzing your logo...' : 'Analyzing your design...'}</h2><ul style="padding:0">${st.map((s, i) => `<li class="${i < S.stage ? 'done' : i === S.stage ? 'on' : ''}">${i < S.stage ? '✓' : i === S.stage ? '●' : '○'} ${s}</li>`).join('')}</ul></div>`;
+    const isLogo = S.mode === 'logo', isAd = S.mode === 'ad';
+    const st = isLogo ? ['Reading your logo', 'Studying brand context', 'Reviewing typography, icon & color', 'Preparing creative direction'] : isAd ? ['Reading your ad creative', 'Checking hook & hierarchy', 'Reviewing CTA & readability', 'Scoring visual impact'] : ['Reading your design', 'Checking typography & layout', 'Scoring categories', 'Preparing feedback'];
+    const title = isLogo ? 'Analyzing your logo...' : isAd ? 'Analyzing your ad...' : 'Analyzing your design...';
+    return `<div class="load card" role="status" aria-live="polite"><div class="spin"></div><h2 style="margin-top:0">${title}</h2><ul style="padding:0">${st.map((s, i) => `<li class="${i < S.stage ? 'done' : i === S.stage ? 'on' : ''}">${i < S.stage ? '✓' : i === S.stage ? '●' : '○'} ${s}</li>`).join('')}</ul></div>`;
   }
   const hero = `<section class="hero"><div class="eyebrow">GLOWUP</div><h1>Design analysis, to the point.</h1><p class="mut">Upload your design and get clear, actionable feedback.</p></section>`;
   const err = S.err ? `<p class="err" role="alert">${esc(S.err)}</p>` : '';
@@ -141,6 +159,7 @@ function home() {
     <div class="card prev">${thumb}${nameLine}</div>
     <div class="card pick-card"><h3 style="margin:0">What are you uploading?</h3><div class="pick-row">
       <button class="pick-btn" data-act="mode" data-mode="post"><span class="pick-ico">🎨</span><b>Creative Post</b><span class="mut small">Posts, posters, UI, flyers &amp; more</span></button>
+      <button class="pick-btn" data-act="mode" data-mode="ad"><span class="pick-ico">📢</span><b>Ad Creative</b><span class="mut small">Ads — hook, CTA &amp; impact</span></button>
       <button class="pick-btn" data-act="mode" data-mode="logo"><span class="pick-ico">✦</span><b>Logo</b><span class="mut small">Logo &amp; brand mark review</span></button>
     </div></div>
     ${err}${demoRow}${priv}`;
@@ -152,6 +171,14 @@ function home() {
     return `${hero}
     ${up}
     ${err}${demoRow}${priv}`;
+  }
+
+  // Ad Creative — same flow as Creative Post
+  if (S.mode === 'ad') {
+    const upAd = `<div class="card prev">${S.pdf ? `<p class="mut" style="text-align:center">📄 PDF selected (preview not available)</p>` : `<img src="${S.src}" alt="Preview of your uploaded ad creative">`}<p style="text-align:center;margin:0"><b>${esc(S.file.name)}</b> · <span class="mut">${(S.file.size / MB).toFixed(2)} MB</span></p><div class="row"><button class="pri" data-act="analyze-ad">🔍 Analyze Ad</button><label class="btn">Replace<input type="file" hidden accept=".png,.jpg,.jpeg,.webp,.pdf" data-file></label><button class="dng" data-act="remove">Remove</button></div></div>`;
+    return `${hero}
+    ${upAd}
+    ${err}${priv}`;
   }
 
   // Logo — brief step
@@ -238,10 +265,41 @@ function logoView() {
 </div></div>`;
 }
 
+/* ---------- ad review view ---------- */
+function adView() {
+  const r = S.result;
+  if (!r || !r.dimensions) return `<p class="hero">No ad review yet. <a href="#home">Analyze an ad</a>.</p>`;
+  const sevOrder = { critical: 0, important: 1, minor: 2 };
+  const is = (r.issues || []).slice().sort((x, y) => sevOrder[x.severity] - sevOrder[y.severity]).map((x, n) => ({ ...x, cat: x.area || 'general', n: n + 1 }));
+  const marks = is.filter((i) => i.location).map((i) => { const l = i.location; return `<div class="box ${i.severity}" style="left:${l.x}%;top:${l.y}%;width:${l.width}%;height:${l.height}%;${S.sel === i.n ? '' : 'opacity:.35'}"></div><button class="mk ${i.severity}" style="left:${l.x}%;top:${l.y}%" data-act="sel" data-n="${i.n}" aria-label="Issue ${i.n}: ${esc(i.title)}">${i.n}</button>`; }).join('');
+  const issueRows = is.map((i) => `<div class="issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}" data-act="sel" data-n="${i.n}"><div class="issue-top"><span class="sev-dot"></span><h3>${i.n}. ${esc(i.title)}</h3><span class="cat">${esc(i.cat)}</span><span class="pill">${sevLabel[i.severity]}</span></div><p class="issue-desc">${esc(i.description)}</p>${i.how_to_improve ? `<div class="fix-strip"><span class="fix-label">✦ Fix</span><span>${esc(i.how_to_improve)}</span></div>` : ''}</div>`).join('');
+  const sc = scoreColor(r.overall.score);
+  const dims = [['hook', '🪝 Hook'], ['hierarchy', '📐 Hierarchy'], ['cta', '🎯 CTA'], ['readability', '👁️ Readability'], ['impact', '⚡ Visual Impact']];
+  const dimRows = dims.map(([k, label]) => {
+    const d = r.dimensions[k]; if (!d) return '';
+    return `<div class="dim-row"><div class="dim-top"><h3 style="margin:0">${label}</h3><span class="dim-score" style="color:${scoreColor(d.score)}">${d.score}</span></div><p class="issue-desc" style="margin-top:4px">${esc(d.take)}</p>${d.fix ? `<p class="small" style="margin:6px 0 0"><b>→</b> ${esc(d.fix)}</p>` : ''}</div>`;
+  }).join('');
+
+  return `<div class="dash"><div class="stage"><div class="card" style="text-align:center">${S.demo ? '<p class="mut small" style="margin:0 0 8px">Demo — sample data</p>' : ''}<div class="wrap"><img src="${S.src}" alt="The analyzed ad creative with numbered issue markers">${marks}</div>${S.pdf ? '<p class="mut small">Issue markers are not available for PDFs.</p>' : ''}</div></div>
+<div>
+<div class="card">
+  <div class="summary-header"><div class="big" style="color:${sc}">${r.overall.score}</div><div><div class="mut small">Ad Score</div><div style="font-weight:600;color:${sc}">${scoreLabel(r.overall.score)}${r.ad_format ? ` · <span class="badge">${esc(r.ad_format)}</span>` : ''}</div></div></div>
+  <p style="margin:10px 0 0">${esc(r.overall.summary)}</p>
+
+  <div class="a-sec"><h3>🎯 Ad Breakdown</h3>${dimRows}</div>
+
+  <div class="a-sec"><h3>✅ Changes Required</h3><ul class="clean">${(r.changes || []).map((s) => `<li class="chg">${esc(s)}</li>`).join('') || '<li class="ok">No changes required — nice work!</li>'}</ul></div>
+
+  <div class="a-sec"><h3>🔍 Issues</h3>${issueRows || '<p class="mut" style="margin:0">No issues found. Nice work!</p>'}</div>
+</div>
+<p class="row" style="justify-content:flex-start;margin-top:16px"><a class="btn pri" href="#home" data-act="new">🔍 Analyze another</a></p>
+</div></div>`;
+}
+
 /* ---------- router + events ---------- */
 function render() {
   const p = (location.hash.slice(1) || 'home').split(':')[0], y = scrollY;
-  app.innerHTML = { home, analysis, logo: logoView }[p]?.() ?? home();
+  app.innerHTML = { home, analysis, logo: logoView, ad: adView }[p]?.() ?? home();
   scrollTo(0, y);
 }
 addEventListener('hashchange', () => { scrollTo(0, 0); render(); });
@@ -252,6 +310,7 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]'); if (!b) return; const a = b.dataset.act, n = +b.dataset.n;
   if (a === 'analyze') analyze();
   else if (a === 'analyze-logo') analyzeLogo();
+  else if (a === 'analyze-ad') analyzeAd();
   else if (a === 'copy-review') { if (S.result) navigator.clipboard.writeText(logoText(S.result)).then(() => { b.textContent = '✅ Copied!'; setTimeout(() => { b.textContent = '📋 Copy Review'; }, 1500); }).catch(() => {}); }
   else if (a === 'mode') { S.mode = b.dataset.mode || null; S.err = ''; render(); }
   else if (a === 'remove') { S.file = S.src = null; S.err = ''; S.mode = null; S.brief = ''; render(); }
