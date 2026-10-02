@@ -157,6 +157,7 @@ async function pickWeb(f) {
     const d = await readData(f);
     S.web.file = { name: f.name, size: f.size };
     S.web.src = await shrink(d, 1800, 0.85);
+    S.web.auto = false;
     S.demo = false;
   } catch { S.err = 'We could not read that file. It may be corrupted.'; S.web.file = null; S.web.src = null; }
   render();
@@ -176,7 +177,12 @@ async function analyzeWebsite() {
     const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify({ image: S.web.src || undefined, type: 'website', url }) });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(j.error || 'Something went wrong while analyzing your website. Please try again.');
+    const autoShot = j.screenshot; delete j.screenshot;
     S.result = j; S.demo = false; S.sel = null;
+    if (autoShot && !S.web.src) {
+      S.web.src = autoShot; S.web.auto = true;
+      S.web.file = { name: 'Captured from your link', size: 0 };
+    }
     S.busy = false; clearInterval(timer); go('website'); render();
   } catch (e) {
     S.err = e.name === 'AbortError' ? 'The analysis took too long. Try again in a moment.' : (e instanceof TypeError ? 'Network problem. Check your connection and try again.' : e.message);
@@ -189,7 +195,7 @@ function home() {
   if (S.busy) {
     const isWeb = S.tab === 'website';
     const isLogo = S.mode === 'logo', isAd = S.mode === 'ad';
-    const st = isWeb ? ['Opening your website', 'Reading content & structure', 'Reviewing design & UX', 'Preparing creative direction']
+    const st = isWeb ? ['Capturing your website', 'Reading content & structure', 'Reviewing UI/UX details', 'Preparing feedback']
       : isLogo ? ['Reading your logo', 'Studying brand context', 'Reviewing typography, icon & color', 'Preparing creative direction']
       : isAd ? ['Reading your ad creative', 'Checking hook & hierarchy', 'Reviewing CTA & readability', 'Scoring visual impact']
       : ['Reading your design', 'Checking typography & layout', 'Scoring categories', 'Preparing feedback'];
@@ -198,7 +204,7 @@ function home() {
   }
   const isWeb = S.tab === 'website';
   const hero = isWeb
-    ? `<section class="hero"><div class="eyebrow">GLOWUP</div><h1>Website review, to the point.</h1><p class="mut">Paste your link or drop a screenshot — get a UI/UX designer's read on your site.</p></section>`
+    ? `<section class="hero"><div class="eyebrow">GLOWUP</div><h1>Website review, to the point.</h1><p class="mut">Paste your link and we capture the page — or drop your own screenshot. UI/UX feedback, fast.</p></section>`
     : `<section class="hero"><div class="eyebrow">GLOWUP</div><h1>Design analysis, to the point.</h1><p class="mut">Upload your design and get clear, actionable feedback.</p></section>`;
   const tabs = `<div class="tabs" role="tablist" aria-label="Review type">
     <button class="tab ${!isWeb ? 'active' : ''}" data-act="tab" data-tab="design" role="tab" aria-selected="${!isWeb}">🎨 Design Review</button>
@@ -211,24 +217,24 @@ function home() {
   // Website Review — link + screenshot, or both
   if (isWeb) {
     const shot = S.web.src
-      ? `<div class="web-shot"><img src="${S.web.src}" alt="Preview of your website screenshot"><p style="text-align:center;margin:8px 0 0"><b>${esc(S.web.file?.name || 'Pasted screenshot')}</b></p><div class="row"><label class="btn">Replace<input type="file" hidden accept=".png,.jpg,.jpeg,.webp" data-webfile></label><button class="dng" data-act="web-remove">Remove</button></div></div>`
+      ? `<div class="web-shot"><img src="${S.web.src}" alt="Preview of your website screenshot"><p style="text-align:center;margin:8px 0 0"><b>${S.web.auto ? '⚡ ' : ''}${esc(S.web.file?.name || 'Pasted screenshot')}</b>${S.web.auto ? '<br><span class="mut small">We grabbed this from your link automatically</span>' : ''}</p><div class="row"><label class="btn">Replace<input type="file" hidden accept=".png,.jpg,.jpeg,.webp" data-webfile></label><button class="dng" data-act="web-remove">Remove</button></div></div>`
       : `<label class="drop sm" id="webdrop"><input type="file" hidden accept=".png,.jpg,.jpeg,.webp" data-webfile><b style="font-size:16px">Drag &amp; drop a screenshot</b><p class="mut small">PNG · JPG · WEBP · up to 10 MB</p><span class="btn pri">Choose a file</span></label>`;
     return `${hero}${tabs}
     <div class="web-grid">
       <div class="card web-card">
         <h3>🔗 Paste your link</h3>
-        <p class="mut small">We open the live site and read its content — UI/UX review, plus content mistakes caught.</p>
+        <p class="mut small">We capture the live site and read its content — full UI/UX review.</p>
         <input class="url-input" id="webUrl" type="text" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://yourwebsite.com" value="${esc(S.web.url)}">
         <p class="mut small" style="margin:10px 0 0">Example: <b>yourwebsite.com</b> or any page URL</p>
       </div>
       <div class="card web-card">
         <h3>🖼️ Add a screenshot</h3>
-        <p class="mut small">Optional — gives visual design feedback with markers.</p>
+        <p class="mut small">Optional — skip it and we capture the page from your link automatically.</p>
         ${shot}
       </div>
     </div>
     <div class="row" style="margin-top:18px"><button class="pri big" data-act="analyze-website">🔍 Analyze Website</button></div>
-    <p class="hint">💡 Best result: add <b>both</b> — screenshot for the UI/UX read (spacing, alignment, contrast), link so content mistakes get caught too.</p>
+    <p class="hint">💡 Just paste your link — we grab the screenshot ourselves. Drop your own to review a specific view (mobile, a section, a state).</p>
     ${err}${demoRow}${priv}`;
   }
 
@@ -435,7 +441,7 @@ document.addEventListener('click', (e) => {
   else if (a === 'mode') { S.mode = b.dataset.mode || null; S.err = ''; render(); }
   else if (a === 'tab') { S.tab = b.dataset.tab === 'website' ? 'website' : 'design'; S.err = ''; render(); }
   else if (a === 'analyze-website') analyzeWebsite();
-  else if (a === 'web-remove') { S.web.file = null; S.web.src = null; S.err = ''; render(); }
+  else if (a === 'web-remove') { S.web.file = null; S.web.src = null; S.web.auto = false; S.err = ''; render(); }
   else if (a === 'remove') { S.file = S.src = null; S.err = ''; S.mode = null; S.brief = ''; render(); }
   else if (a === 'new') { S.file = S.src = null; S.result = null; S.mode = null; S.brief = ''; S.web = { url: '', file: null, src: null }; }
   else if (a === 'demo') {

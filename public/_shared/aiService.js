@@ -407,31 +407,68 @@ function normalizeWeb(raw) {
   };
 }
 
+// Auto-capture a screenshot of the live site (thum.io primary, microlink fallback). Never throws — returns null on failure.
+async function captureScreenshot(rawUrl) {
+  const target = /^https?:\/\//i.test(rawUrl) ? rawUrl : 'https://' + rawUrl;
+  const providers = [
+    (u) => 'https://image.thum.io/get/width/1280/crop/900/noanimate/' + u,
+    (u) => 'https://api.microlink.io/?url=' + encodeURIComponent(u) + '&screenshot=true&meta=false&embed=screenshot.url&viewport.width=1280&viewport.height=900'
+  ];
+  for (const build of providers) {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 15000);
+    try {
+      const r = await fetch(build(target), { signal: ctrl.signal, redirect: 'follow', headers: { Accept: 'image/*' } });
+      clearTimeout(to);
+      if (!r.ok) continue;
+      const buf = Buffer.from(await r.arrayBuffer());
+      const isJpg = buf[0] === 0xff && buf[1] === 0xd8;
+      const isPng = buf[0] === 0x89 && buf[1] === 0x50;
+      if ((!isJpg && !isPng) || buf.length < 5000 || buf.length > 8 * 1024 * 1024) continue;
+      return { mime: isJpg ? 'image/jpeg' : 'image/png', data: buf.toString('base64') };
+    } catch { clearTimeout(to); }
+  }
+  return null;
+}
+
 exports.analyzeWebsite = async ({ file, url }) => {
   let digestBlock = '', siteUrl = url || '';
-  if (url) {
-    const site = await fetchSite(url);
-    if (site.error) {
-      if (!file) { const e = new Error(site.error); e.expose = true; throw e; }
-      digestBlock = '(The link could not be opened: ' + site.error + ' Reviewing the screenshot only.)';
-    } else {
-      siteUrl = site.finalUrl || site.url;
-      digestBlock = site.digest;
-    }
+  let shot = file || null, shotSrc = file ? 'user' : null;
+
+  // Content fetch + auto-screenshot run in parallel; user's own screenshot always wins
+  const [site, autoShot] = await Promise.all([
+    url ? fetchSite(url) : Promise.resolve(null),
+    (url && !file) ? captureScreenshot(url) : Promise.resolve(null)
+  ]);
+  if (autoShot && !shot) { shot = autoShot; shotSrc = 'auto'; }
+
+  if (site && site.error) {
+    if (!shot) { const e = new Error(site.error); e.expose = true; throw e; }
+    digestBlock = '(The link content could not be read: ' + site.error + ' Reviewing the screenshot only.)';
+  } else if (site) {
+    siteUrl = site.finalUrl || site.url;
+    digestBlock = site.digest;
   }
-  const inputNote = digestBlock && file
-    ? 'INPUT: a screenshot of the website AND the page content fetched from the live URL below. Review BOTH — UI/UX from the screenshot, content mistakes and page journey from the text.'
+
+  const shotLabel = shotSrc === 'auto' ? 'an auto-captured screenshot of the live site' : 'a screenshot of the website';
+  const inputNote = digestBlock && shot
+    ? `INPUT: ${shotLabel} AND the page content fetched from the live URL below. Review BOTH — UI/UX from the screenshot, content mistakes and page journey from the text.`
     : digestBlock
       ? 'INPUT: the page content fetched from the live website below. No screenshot — review the page journey and catch content mistakes; keep visual scores conservative.'
-      : 'INPUT: a screenshot of the website. Review the UI/UX exactly as shown.';
+      : `INPUT: ${shotLabel}. Review the UI/UX exactly as shown.`;
   const text = `${inputNote}\n\n${digestBlock ? 'PAGE CONTENT:\n' + digestBlock + '\n\n' : ''}Review it like a senior UI/UX designer: fair, objective, every visible detail covered. JSON only.`;
   const out = normalizeWeb(await callModel({
-    mime: file?.mime, data: file?.data,
+    mime: shot?.mime, data: shot?.data,
     system: WEBSITE_SYSTEM,
     text,
     maxTokens: 7000,
     temperature: 0.3
   }));
   if (siteUrl && !out.site_url) out.site_url = siteUrl;
+  // Hand the exact pixels the model reviewed back to the client so markers line up
+  if (shotSrc === 'auto' && shot) {
+    out.screenshot = `data:${shot.mime};base64,${shot.data}`;
+    out.shot_src = 'auto';
+  }
   return out;
 };
