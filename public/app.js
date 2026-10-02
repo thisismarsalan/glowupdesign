@@ -1,7 +1,7 @@
 const CATS = ['typography', 'spacing', 'alignment', 'color', 'readability', 'hierarchy', 'composition'];
 const $ = (s) => document.querySelector(s), app = $('#app');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const S = { file: null, src: null, pdf: false, result: null, demo: false, sel: null, err: '', busy: false, stage: 0, mode: null, brief: '' };
+const S = { file: null, src: null, pdf: false, result: null, demo: false, sel: null, err: '', busy: false, stage: 0, mode: null, brief: '', tab: 'design', web: { url: '', file: null, src: null } };
 const TYPES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'], MB = 1048576;
 
 /* ---------- demo ---------- */
@@ -20,6 +20,21 @@ const DEMO = {
     { area: 'readability', title: 'Subtitle is nearly invisible', severity: 'critical', action: 'Darken the subtitle to navy, or put it on a dark block.', location: { x: 9, y: 52, width: 62, height: 7 } },
     { area: 'alignment', title: 'Button breaks left alignment', severity: 'important', action: 'Move the button to the headline\u2019s left edge.', location: { x: 45, y: 77, width: 40, height: 8 } },
     { area: 'typography', title: 'Footer text too small', severity: 'minor', action: 'Raise the footer text to 14\u201316px.', location: { x: 9, y: 95, width: 72, height: 3 } }
+  ]
+};
+const DEMO_WEB = {
+  site_url: 'demo.glowup.app',
+  overall: { score: 71, summary: 'Clear offer and a confident look. The hero buries the call to action, and first-time visitors get no proof that this business delivers.' },
+  scores: { clarity: 78, hierarchy: 66, visual_design: 80, cta: 52, trust: 60, content: 74 },
+  works: [
+    { area: 'clarity', point: 'Offer reads in seconds', why: 'Headline states exactly what is on sale.' },
+    { area: 'visual_design', point: 'Consistent, modern styling', why: 'Type scale and spacing feel deliberate.' },
+    { area: 'content', point: 'Copy sounds human', why: 'Short lines with a friendly, confident voice.' }
+  ],
+  changes: [
+    { area: 'cta', title: 'Main button competes with banner', severity: 'critical', action: 'Give the primary button its own space, above the fold, in the brand accent.', location: null },
+    { area: 'trust', title: 'No proof near the offer', severity: 'important', action: 'Add one review line or a client logo row under the hero.', location: null },
+    { area: 'hierarchy', title: 'Section titles all look equal', severity: 'minor', action: 'Make section titles larger than body headers to create a clear step.', location: null }
   ]
 };
 
@@ -54,7 +69,8 @@ async function handlePaste(e) {
       const file = item.getAsFile();
       if (file) {
         const ext = item.type.split('/')[1] || 'png';
-        pick(new File([file], `pasted-design.${ext}`, { type: item.type }));
+        const isWeb = S.tab === 'website';
+        (isWeb ? pickWeb : pick)(new File([file], `${isWeb ? 'pasted-website' : 'pasted-design'}.${ext}`, { type: item.type }));
         return;
       }
     }
@@ -130,28 +146,103 @@ async function analyzeLogo() {
   } finally { clearInterval(timer); clearTimeout(to); render(); }
 }
 
+async function pickWeb(f) {
+  S.err = '';
+  if (!f) return;
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(f.type)) S.err = 'Unsupported file. Please choose a PNG, JPG or WEBP screenshot.';
+  else if (!f.size) S.err = 'That file is empty.';
+  else if (f.size > 10 * MB) S.err = 'That file is larger than 10 MB.';
+  if (S.err) return render();
+  try {
+    const d = await readData(f);
+    S.web.file = { name: f.name, size: f.size };
+    S.web.src = await shrink(d, 1800, 0.85);
+    S.demo = false;
+  } catch { S.err = 'We could not read that file. It may be corrupted.'; S.web.file = null; S.web.src = null; }
+  render();
+}
+
+async function analyzeWebsite() {
+  const url = (S.web.url || '').trim();
+  if (!url && !S.web.src) { S.err = 'Add a website link or a screenshot — or both.'; return render(); }
+  if (url) {
+    const bare = url.replace(/^https?:\/\//i, '');
+    if (!/^([a-z0-9-]+\.)+[a-z]{2,}(\/\S*)?$/i.test(bare)) { S.err = 'That link does not look valid. Try e.g. yourwebsite.com'; return render(); }
+  }
+  S.busy = true; S.err = ''; S.stage = 0; render();
+  const timer = setInterval(() => { S.stage = Math.min(S.stage + 1, 3); render(); }, 2500);
+  const ctrl = new AbortController(), to = setTimeout(() => ctrl.abort(), 120000);
+  try {
+    const res = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify({ image: S.web.src || undefined, type: 'website', url }) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || 'Something went wrong while analyzing your website. Please try again.');
+    S.result = j; S.demo = false; S.sel = null;
+    S.busy = false; clearInterval(timer); go('website'); render();
+  } catch (e) {
+    S.err = e.name === 'AbortError' ? 'The analysis took too long. Try again in a moment.' : (e instanceof TypeError ? 'Network problem. Check your connection and try again.' : e.message);
+    S.busy = false;
+  } finally { clearInterval(timer); clearTimeout(to); render(); }
+}
+
 /* ---------- views ---------- */
 function home() {
   if (S.busy) {
+    const isWeb = S.tab === 'website';
     const isLogo = S.mode === 'logo', isAd = S.mode === 'ad';
-    const st = isLogo ? ['Reading your logo', 'Studying brand context', 'Reviewing typography, icon & color', 'Preparing creative direction'] : isAd ? ['Reading your ad creative', 'Checking hook & hierarchy', 'Reviewing CTA & readability', 'Scoring visual impact'] : ['Reading your design', 'Checking typography & layout', 'Scoring categories', 'Preparing feedback'];
-    const title = isLogo ? 'Analyzing your logo...' : isAd ? 'Analyzing your ad...' : 'Analyzing your design...';
+    const st = isWeb ? ['Opening your website', 'Reading content & structure', 'Reviewing design & UX', 'Preparing creative direction']
+      : isLogo ? ['Reading your logo', 'Studying brand context', 'Reviewing typography, icon & color', 'Preparing creative direction']
+      : isAd ? ['Reading your ad creative', 'Checking hook & hierarchy', 'Reviewing CTA & readability', 'Scoring visual impact']
+      : ['Reading your design', 'Checking typography & layout', 'Scoring categories', 'Preparing feedback'];
+    const title = isWeb ? 'Analyzing your website...' : isLogo ? 'Analyzing your logo...' : isAd ? 'Analyzing your ad...' : 'Analyzing your design...';
     return `<div class="load card" role="status" aria-live="polite"><div class="spin"></div><h2 style="margin-top:0">${title}</h2><ul style="padding:0">${st.map((s, i) => `<li class="${i < S.stage ? 'done' : i === S.stage ? 'on' : ''}">${i < S.stage ? '✓' : i === S.stage ? '●' : '○'} ${s}</li>`).join('')}</ul></div>`;
   }
-  const hero = `<section class="hero"><div class="eyebrow">GLOWUP</div><h1>Design analysis, to the point.</h1><p class="mut">Upload your design and get clear, actionable feedback.</p></section>`;
+  const isWeb = S.tab === 'website';
+  const hero = isWeb
+    ? `<section class="hero"><div class="eyebrow">GLOWUP</div><h1>Website review, to the point.</h1><p class="mut">Paste your link or drop a screenshot — get a creative director's read on your site.</p></section>`
+    : `<section class="hero"><div class="eyebrow">GLOWUP</div><h1>Design analysis, to the point.</h1><p class="mut">Upload your design and get clear, actionable feedback.</p></section>`;
+  const tabs = `<div class="tabs" role="tablist" aria-label="Review type">
+    <button class="tab ${!isWeb ? 'active' : ''}" data-act="tab" data-tab="design" role="tab" aria-selected="${!isWeb}">🎨 Design Review</button>
+    <button class="tab ${isWeb ? 'active' : ''}" data-act="tab" data-tab="website" role="tab" aria-selected="${isWeb}">🌐 Website Review</button>
+  </div>`;
   const err = S.err ? `<p class="err" role="alert">${esc(S.err)}</p>` : '';
-  const demoRow = `<div class="row"><button data-act="demo">🎨 Try a sample design</button></div>`;
-  const priv = `<p class="mut small" style="text-align:center">🔒 Your design is used only for analysis and is not saved.</p>`;
+  const demoRow = `<div class="row"><button data-act="demo">${isWeb ? '🌐 Try a sample website' : '🎨 Try a sample design'}</button></div>`;
+  const priv = `<p class="mut small" style="text-align:center">🔒 Your ${isWeb ? 'website data' : 'design'} is used only for analysis and is not saved.</p>`;
+
+  // Website Review — link + screenshot, or both
+  if (isWeb) {
+    const shot = S.web.src
+      ? `<div class="web-shot"><img src="${S.web.src}" alt="Preview of your website screenshot"><p style="text-align:center;margin:8px 0 0"><b>${esc(S.web.file?.name || 'Pasted screenshot')}</b></p><div class="row"><label class="btn">Replace<input type="file" hidden accept=".png,.jpg,.jpeg,.webp" data-webfile></label><button class="dng" data-act="web-remove">Remove</button></div></div>`
+      : `<label class="drop sm" id="webdrop"><input type="file" hidden accept=".png,.jpg,.jpeg,.webp" data-webfile><b style="font-size:16px">Drag &amp; drop a screenshot</b><p class="mut small">PNG · JPG · WEBP · up to 10 MB</p><span class="btn pri">Choose a file</span></label>`;
+    return `${hero}${tabs}
+    <div class="web-grid">
+      <div class="card web-card">
+        <h3>🔗 Paste your link</h3>
+        <p class="mut small">We open the live site and review content, structure &amp; SEO.</p>
+        <input class="url-input" id="webUrl" type="text" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://yourwebsite.com" value="${esc(S.web.url)}">
+        <p class="mut small" style="margin:10px 0 0">Example: <b>yourwebsite.com</b> or any page URL</p>
+      </div>
+      <div class="card web-card">
+        <h3>🖼️ Add a screenshot</h3>
+        <p class="mut small">Optional — gives visual design feedback with markers.</p>
+        ${shot}
+      </div>
+    </div>
+    <div class="row" style="margin-top:18px"><button class="pri big" data-act="analyze-website">🔍 Analyze Website</button></div>
+    <p class="hint">💡 Best result: add <b>both</b> — link for content &amp; structure, screenshot for design.</p>
+    ${err}${demoRow}${priv}`;
+  }
+
+  // ---- Design Review: existing flow, unchanged below the tabs ----
   const thumb = S.pdf ? `<p class="mut" style="text-align:center">📄 PDF selected (preview not available)</p>` : `<img src="${S.src}" alt="Preview of your uploaded design">`;
   const nameLine = S.file ? `<p style="text-align:center;margin:0"><b>${esc(S.file.name)}</b> · <span class="mut">${(S.file.size / MB).toFixed(2)} MB</span></p>` : '';
 
   if (!S.src) {
-    return `${hero}<label class="drop" id="drop"><input type="file" accept=".png,.jpg,.jpeg,.webp,.pdf" data-file><b style="font-size:18px">Drag &amp; drop your design here</b><p class="mut">PNG • JPG • WEBP • PDF · up to 10 MB</p><span class="btn pri">Choose a file</span></label>${err}${demoRow}${priv}`;
+    return `${hero}${tabs}<label class="drop" id="drop"><input type="file" accept=".png,.jpg,.jpeg,.webp,.pdf" data-file><b style="font-size:18px">Drag &amp; drop your design here</b><p class="mut">PNG • JPG • WEBP • PDF · up to 10 MB</p><span class="btn pri">Choose a file</span></label>${err}${demoRow}${priv}`;
   }
 
   // Step: choose what kind of upload this is
   if (!S.mode) {
-    return `${hero}
+    return `${hero}${tabs}
     <div class="card prev">${thumb}${nameLine}</div>
     <div class="card pick-card"><h3 style="margin:0">What are you uploading?</h3><div class="pick-row">
       <button class="pick-btn" data-act="mode" data-mode="post"><span class="pick-ico">🎨</span><b>Creative Post</b><span class="mut small">Posts, posters, UI, flyers &amp; more</span></button>
@@ -164,7 +255,7 @@ function home() {
   // Creative Post — existing workflow, unchanged
   if (S.mode === 'post') {
     const up = `<div class="card prev">${S.pdf ? `<p class="mut" style="text-align:center">📄 PDF selected (preview not available)</p>` : `<img src="${S.src}" alt="Preview of your uploaded design">`}<p style="text-align:center;margin:0"><b>${esc(S.file.name)}</b> · <span class="mut">${(S.file.size / MB).toFixed(2)} MB</span></p><div class="row"><button class="pri" data-act="analyze">🔍 Analyze Design</button><label class="btn">Replace<input type="file" hidden accept=".png,.jpg,.jpeg,.webp,.pdf" data-file></label><button class="dng" data-act="remove">Remove</button></div></div>`;
-    return `${hero}
+    return `${hero}${tabs}
     ${up}
     ${err}${demoRow}${priv}`;
   }
@@ -172,13 +263,13 @@ function home() {
   // Ad Creative — same flow as Creative Post
   if (S.mode === 'ad') {
     const upAd = `<div class="card prev">${S.pdf ? `<p class="mut" style="text-align:center">📄 PDF selected (preview not available)</p>` : `<img src="${S.src}" alt="Preview of your uploaded ad creative">`}<p style="text-align:center;margin:0"><b>${esc(S.file.name)}</b> · <span class="mut">${(S.file.size / MB).toFixed(2)} MB</span></p><div class="row"><button class="pri" data-act="analyze-ad">🔍 Analyze Ad</button><label class="btn">Replace<input type="file" hidden accept=".png,.jpg,.jpeg,.webp,.pdf" data-file></label><button class="dng" data-act="remove">Remove</button></div></div>`;
-    return `${hero}
+    return `${hero}${tabs}
     ${upAd}
     ${err}${priv}`;
   }
 
   // Logo — brief step
-  return `${hero}
+  return `${hero}${tabs}
   <div class="card prev">${thumb}${nameLine}</div>
   <div class="card pick-card" style="text-align:left">
     <h3 style="margin:0 0 4px">Tell us what you designed</h3>
@@ -286,16 +377,55 @@ function adView() {
 </div></div>`;
 }
 
+/* ---------- website review view ---------- */
+function websiteView() {
+  const r = S.result; if (!r) return `<p class="hero">No analysis yet. <a href="#home">Analyze a website</a>.</p>`;
+  const dims = [['clarity', 'Clarity'], ['hierarchy', 'Hierarchy'], ['visual_design', 'Visual Design'], ['cta', 'CTA'], ['trust', 'Trust'], ['content', 'Content']];
+  const ch = numberChanges(r.changes);
+  const marks = S.web.src ? ch.filter((i) => i.location).map((i) => { const l = i.location; return `<div class="box ${i.severity}" style="left:${l.x}%;top:${l.y}%;width:${l.width}%;height:${l.height}%;${S.sel === i.n ? '' : 'opacity:.35'}"></div><button class="mk ${i.severity}" style="left:${l.x}%;top:${l.y}%" data-act="sel" data-n="${i.n}" aria-label="Change ${i.n}: ${esc(i.title)}">${i.n}</button>`; }).join('') : '';
+  const changeRows = ch.map((i) => `<div class="issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}" data-act="sel" data-n="${i.n}"><div class="issue-top"><span class="sev-dot"></span><h3>${i.n}. ${esc(i.title)}</h3><span class="cat">${esc(i.area)}</span><span class="pill">${sevLabel[i.severity]}</span></div>${i.action ? `<div class="fix-strip"><span class="fix-label">✦ Fix</span><span>${esc(i.action)}</span></div>` : ''}</div>`).join('');
+  const workRows = (r.works || []).map((w) => `<li class="ok"><span class="cat">${esc(w.area)}</span> <b>${esc(w.point)}</b>${w.why ? ` <span class="why" style="display:inline">— ${esc(w.why)}</span>` : ''}</li>`).join('') || '<li class="ok">Solid all round.</li>';
+  const sc = scoreColor(r.overall.score);
+  const stage = S.web.src
+    ? `<div class="card" style="text-align:center">${S.demo ? '<p class="mut small" style="margin:0 0 8px">Demo — sample data</p>' : ''}<div class="wrap"><img src="${S.web.src}" alt="The analyzed website screenshot with numbered change markers">${marks}</div></div>`
+    : `<div class="card site-card">${S.demo ? '<p class="mut small" style="margin:0 0 8px">Demo — sample data</p>' : ''}<div class="site-ico">🌐</div><div class="site-url">${esc(r.site_url || S.web.url || 'Website')}</div><p class="mut small" style="margin:6px 0 0">Live site reviewed — content &amp; structure</p></div>`;
+
+  return `<div class="dash"><div class="stage">${stage}</div>
+<div>
+<div class="card">
+  <div class="summary-header"><div class="big" style="color:${sc}">${r.overall.score}</div><div><div class="mut small">Overall Score</div><div style="font-weight:600;color:${sc}">${scoreLabel(r.overall.score)} · <span class="badge">${esc(r.site_url || 'Website')}</span></div></div></div>
+  <p style="margin:10px 0 0">${esc(r.overall.summary)}</p>
+
+  <div class="a-sec"><h3>📊 Website Scores</h3><div class="scores">${dims.map(([k, label]) => { const s = r.scores?.[k] ?? 0; return `<div class="sc"><b style="color:${scoreColor(s)}">${s}</b><span class="small mut">${label}</span></div>`; }).join('')}</div></div>
+
+  <div class="a-sec"><h3>✅ Works</h3><ul class="clean">${workRows}</ul></div>
+
+  <div class="a-sec"><h3>🔧 Changes Required</h3>${changeRows || '<p class="ok" style="margin:0">Nothing to change — nice work!</p>'}</div>
+</div>
+<p class="row" style="justify-content:flex-start;margin-top:16px"><a class="btn pri" href="#home" data-act="new">🔍 Analyze another</a></p>
+</div></div>`;
+}
+
 /* ---------- router + events ---------- */
 function render() {
   const p = (location.hash.slice(1) || 'home').split(':')[0], y = scrollY;
-  app.innerHTML = { home, analysis, logo: logoView, ad: adView }[p]?.() ?? home();
+  app.innerHTML = { home, analysis, logo: logoView, ad: adView, website: websiteView }[p]?.() ?? home();
   scrollTo(0, y);
 }
 addEventListener('hashchange', () => { scrollTo(0, 0); render(); });
-document.addEventListener('change', (e) => { if (e.target.matches('[data-file]')) pick(e.target.files[0]); });
-document.addEventListener('input', (e) => { if (e.target.matches('[data-brief]')) S.brief = e.target.value; });
-['dragover', 'dragleave', 'drop'].forEach((t) => document.addEventListener(t, (e) => { const d = e.target.closest?.('#drop'); if (!d) return; e.preventDefault(); d.classList.toggle('over', t === 'dragover'); if (t === 'drop') pick(e.dataTransfer.files[0]); }));
+document.addEventListener('change', (e) => {
+  if (e.target.matches('[data-file]')) pick(e.target.files[0]);
+  else if (e.target.matches('[data-webfile]')) pickWeb(e.target.files[0]);
+});
+document.addEventListener('input', (e) => {
+  if (e.target.matches('[data-brief]')) S.brief = e.target.value;
+  else if (e.target.id === 'webUrl') S.web.url = e.target.value;
+});
+['dragover', 'dragleave', 'drop'].forEach((t) => document.addEventListener(t, (e) => {
+  const d = e.target.closest?.('#drop, #webdrop'); if (!d) return;
+  e.preventDefault(); d.classList.toggle('over', t === 'dragover');
+  if (t === 'drop') (d.id === 'webdrop' ? pickWeb : pick)(e.dataTransfer.files[0]);
+}));
 document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]'); if (!b) return; const a = b.dataset.act, n = +b.dataset.n;
   if (a === 'analyze') analyze();
@@ -303,9 +433,20 @@ document.addEventListener('click', (e) => {
   else if (a === 'analyze-ad') analyzeAd();
   else if (a === 'copy-review') { if (S.result) navigator.clipboard.writeText(logoText(S.result)).then(() => { b.textContent = '✅ Copied!'; setTimeout(() => { b.textContent = '📋 Copy Review'; }, 1500); }).catch(() => {}); }
   else if (a === 'mode') { S.mode = b.dataset.mode || null; S.err = ''; render(); }
+  else if (a === 'tab') { S.tab = b.dataset.tab === 'website' ? 'website' : 'design'; S.err = ''; render(); }
+  else if (a === 'analyze-website') analyzeWebsite();
+  else if (a === 'web-remove') { S.web.file = null; S.web.src = null; S.err = ''; render(); }
   else if (a === 'remove') { S.file = S.src = null; S.err = ''; S.mode = null; S.brief = ''; render(); }
-  else if (a === 'new') { S.file = S.src = null; S.result = null; S.mode = null; S.brief = ''; }
-  else if (a === 'demo') { S.src = 'data:image/svg+xml,' + encodeURIComponent(DEMO_SVG); S.result = DEMO; S.demo = true; S.pdf = false; S.sel = null; go('analysis'); }
+  else if (a === 'new') { S.file = S.src = null; S.result = null; S.mode = null; S.brief = ''; S.web = { url: '', file: null, src: null }; }
+  else if (a === 'demo') {
+    if (S.tab === 'website') {
+      S.result = DEMO_WEB; S.demo = true; S.sel = null;
+      S.web = { url: 'demo.glowup.app', file: null, src: null };
+      go('website');
+    } else {
+      S.src = 'data:image/svg+xml,' + encodeURIComponent(DEMO_SVG); S.result = DEMO; S.demo = true; S.pdf = false; S.sel = null; go('analysis');
+    }
+  }
   else if (a === 'sel') { S.sel = n; render(); document.getElementById('i' + n)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth', block: 'center' }); }
   else if (a === 'copy-var') {
     const t = titleVars(S.result?.title_text || '')[b.dataset.var] || '';
