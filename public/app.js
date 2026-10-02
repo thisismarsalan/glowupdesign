@@ -24,8 +24,8 @@ const DEMO = {
 };
 const DEMO_WEB = {
   site_url: 'demo.glowup.app',
-  overall: { score: 71, summary: 'Confident, modern layout with a clear offer. The CTA loses to the top banner, uneven section gaps break the rhythm, and one card line is still placeholder text.' },
-  scores: { typography: 78, spacing: 62, alignment: 80, contrast: 74, hierarchy: 66, usability: 70 },
+  overall: { score: 74, summary: 'Confident, modern layout with a clear offer. Two things actually matter: the CTA loses to the top banner, and one card still shows placeholder text that kills trust.' },
+  scores: { typography: 78, spacing: 72, alignment: 80, contrast: 74, hierarchy: 66, usability: 72 },
   works: [
     { area: 'typography', point: 'Type scale feels confident', why: 'Headline-to-body steps are clear and readable.' },
     { area: 'alignment', point: 'Everything sits on one grid', why: 'Hero, cards and footer share clean edges.' },
@@ -33,8 +33,7 @@ const DEMO_WEB = {
   ],
   changes: [
     { area: 'hierarchy', title: 'CTA loses to the banner', severity: 'critical', action: 'Give the primary button its own space above the fold.', location: null },
-    { area: 'spacing', title: 'Section gaps are uneven', severity: 'important', action: 'Use one consistent gap between all page sections.', location: null },
-    { area: 'content', title: 'Placeholder text in a card', severity: 'minor', action: 'Replace the filler line with a real supporting sentence.', location: null }
+    { area: 'content', title: 'Placeholder text in a card', severity: 'important', action: 'Replace the filler line with a real supporting sentence.', location: null }
   ]
 };
 

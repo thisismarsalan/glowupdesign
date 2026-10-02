@@ -329,23 +329,34 @@ SCORING (integers 0-100, fair and honest):
 6. usability — how easy the page is to use: clear actions, logical order, low friction.
 
 RULES:
-- works 2-5 items, changes 1-6 items. Flag only real, visible problems. Taste is not a flaw. Few changes on a strong page is correct.
-- Content MISTAKES only (typos, grammar slips, placeholder text) go in area "content" with a severity. Do not rewrite style or tone choices unless they are actual errors.
+- works 2-5 items. changes 0-4 items — fewer is better, ZERO is a valid and good answer ("changes": []).
+- IMPACT BAR — every change must pass this test: "Would fixing this meaningfully improve how real visitors experience the site — clarity, trust, ease of use or conversion?" If not, leave it out. A senior designer only bothers the client about things that matter.
+- NO nitpicks. Skip tiny padding tweaks, micro-alignments, mild color nudges, minor polish and personal taste. "Add a little breathing room" type pedantry does NOT belong in Changes Required. Do not invent problems to fill the list.
+- If the page is strong, say so in the summary and list 0-1 changes. Praise beats padding.
+- Content MISTAKES only (typos in real copy, broken sentences, placeholder text) go in area "content". Ignore any technical artifacts (code, script text) — you review the visible design a visitor sees, never the code behind it.
+- severity: critical ONLY when it blocks the page's main goal (visitor cannot understand the offer, cannot find or trust the main action). "Important" = clearly hurts the experience. Everything else does not make the list.
 - location: percentages of the SCREENSHOT (x,y = top-left), only when highly confident. Content-only issues or no screenshot → null.
-- severity: critical only when it blocks the page's main goal.
 - Every change must be actionable inside the design: fix spacing, alignment, contrast, type, layout or the wording.
 - When there is no screenshot, keep spacing/alignment/contrast scores conservative (mid-range) and focus on hierarchy, usability, type structure and content mistakes.`;
 
 // Compact digest of the page's VISIBLE content — for content mistakes + page journey (UI/UX), not a technical audit
 function digestHtml(html, url, status) {
+  // Strip code and non-visible blocks FIRST — the review must never see scripts/styles as "content"
+  const clean = String(html || '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, ' ')
+    .replace(/<template\b[^>]*>[\s\S]*?<\/template>/gi, ' ');
   const textOf = (s) => String(s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  const title = textOf((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]).slice(0, 140);
-  const grab = (tag, n) => [...html.matchAll(new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)<\\/' + tag + '>', 'gi'))]
+  const title = textOf((clean.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1]).slice(0, 140);
+  const grab = (tag, n) => [...clean.matchAll(new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)<\\/' + tag + '>', 'gi'))]
     .map((m) => textOf(m[1])).filter(Boolean).slice(0, n);
   const h1s = grab('h1', 3), h2s = grab('h2', 8);
-  const labels = [...html.matchAll(/<(a|button)[^>]*>([\s\S]*?)<\/\1>/gi)]
+  const labels = [...clean.matchAll(/<(a|button)[^>]*>([\s\S]*?)<\/\1>/gi)]
     .map((m) => textOf(m[2])).filter((t) => t && t.length < 40).slice(0, 10);
-  const body = textOf((html.match(/<body[^>]*>([\s\S]*)/i) || [])[1] || '');
+  const body = textOf((clean.match(/<body[^>]*>([\s\S]*)/i) || [])[1] || '');
   return [
     'URL: ' + url,
     'Page title: ' + (title || '(missing)'),
@@ -403,7 +414,7 @@ function normalizeWeb(raw) {
         location: locationOf(c?.location)
       }))
       .filter((c) => c.title !== 'Change' || c.action)
-      .slice(0, 6)
+      .slice(0, 4)
   };
 }
 
