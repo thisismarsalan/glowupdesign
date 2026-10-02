@@ -24,17 +24,17 @@ const DEMO = {
 };
 const DEMO_WEB = {
   site_url: 'demo.glowup.app',
-  overall: { score: 71, summary: 'Clear offer and a confident look. The hero buries the call to action, and first-time visitors get no proof that this business delivers.' },
-  scores: { clarity: 78, hierarchy: 66, visual_design: 80, cta: 52, trust: 60, content: 74 },
+  overall: { score: 71, summary: 'Confident, modern layout with a clear offer. The CTA loses to the top banner, uneven section gaps break the rhythm, and one card line is still placeholder text.' },
+  scores: { typography: 78, spacing: 62, alignment: 80, contrast: 74, hierarchy: 66, usability: 70 },
   works: [
-    { area: 'clarity', point: 'Offer reads in seconds', why: 'Headline states exactly what is on sale.' },
-    { area: 'visual_design', point: 'Consistent, modern styling', why: 'Type scale and spacing feel deliberate.' },
-    { area: 'content', point: 'Copy sounds human', why: 'Short lines with a friendly, confident voice.' }
+    { area: 'typography', point: 'Type scale feels confident', why: 'Headline-to-body steps are clear and readable.' },
+    { area: 'alignment', point: 'Everything sits on one grid', why: 'Hero, cards and footer share clean edges.' },
+    { area: 'contrast', point: 'Body text reads easily', why: 'Dark text on light panels stays comfortable.' }
   ],
   changes: [
-    { area: 'cta', title: 'Main button competes with banner', severity: 'critical', action: 'Give the primary button its own space, above the fold, in the brand accent.', location: null },
-    { area: 'trust', title: 'No proof near the offer', severity: 'important', action: 'Add one review line or a client logo row under the hero.', location: null },
-    { area: 'hierarchy', title: 'Section titles all look equal', severity: 'minor', action: 'Make section titles larger than body headers to create a clear step.', location: null }
+    { area: 'hierarchy', title: 'CTA loses to the banner', severity: 'critical', action: 'Give the primary button its own space above the fold.', location: null },
+    { area: 'spacing', title: 'Section gaps are uneven', severity: 'important', action: 'Use one consistent gap between all page sections.', location: null },
+    { area: 'content', title: 'Placeholder text in a card', severity: 'minor', action: 'Replace the filler line with a real supporting sentence.', location: null }
   ]
 };
 
@@ -198,7 +198,7 @@ function home() {
   }
   const isWeb = S.tab === 'website';
   const hero = isWeb
-    ? `<section class="hero"><div class="eyebrow">GLOWUP</div><h1>Website review, to the point.</h1><p class="mut">Paste your link or drop a screenshot — get a creative director's read on your site.</p></section>`
+    ? `<section class="hero"><div class="eyebrow">GLOWUP</div><h1>Website review, to the point.</h1><p class="mut">Paste your link or drop a screenshot — get a UI/UX designer's read on your site.</p></section>`
     : `<section class="hero"><div class="eyebrow">GLOWUP</div><h1>Design analysis, to the point.</h1><p class="mut">Upload your design and get clear, actionable feedback.</p></section>`;
   const tabs = `<div class="tabs" role="tablist" aria-label="Review type">
     <button class="tab ${!isWeb ? 'active' : ''}" data-act="tab" data-tab="design" role="tab" aria-selected="${!isWeb}">🎨 Design Review</button>
@@ -217,7 +217,7 @@ function home() {
     <div class="web-grid">
       <div class="card web-card">
         <h3>🔗 Paste your link</h3>
-        <p class="mut small">We open the live site and review content, structure &amp; SEO.</p>
+        <p class="mut small">We open the live site and read its content — UI/UX review, plus content mistakes caught.</p>
         <input class="url-input" id="webUrl" type="text" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://yourwebsite.com" value="${esc(S.web.url)}">
         <p class="mut small" style="margin:10px 0 0">Example: <b>yourwebsite.com</b> or any page URL</p>
       </div>
@@ -228,7 +228,7 @@ function home() {
       </div>
     </div>
     <div class="row" style="margin-top:18px"><button class="pri big" data-act="analyze-website">🔍 Analyze Website</button></div>
-    <p class="hint">💡 Best result: add <b>both</b> — link for content &amp; structure, screenshot for design.</p>
+    <p class="hint">💡 Best result: add <b>both</b> — screenshot for the UI/UX read (spacing, alignment, contrast), link so content mistakes get caught too.</p>
     ${err}${demoRow}${priv}`;
   }
 
@@ -380,7 +380,7 @@ function adView() {
 /* ---------- website review view ---------- */
 function websiteView() {
   const r = S.result; if (!r) return `<p class="hero">No analysis yet. <a href="#home">Analyze a website</a>.</p>`;
-  const dims = [['clarity', 'Clarity'], ['hierarchy', 'Hierarchy'], ['visual_design', 'Visual Design'], ['cta', 'CTA'], ['trust', 'Trust'], ['content', 'Content']];
+  const dims = [['typography', 'Typography'], ['spacing', 'Spacing'], ['alignment', 'Alignment'], ['contrast', 'Contrast'], ['hierarchy', 'Hierarchy'], ['usability', 'Usability']];
   const ch = numberChanges(r.changes);
   const marks = S.web.src ? ch.filter((i) => i.location).map((i) => { const l = i.location; return `<div class="box ${i.severity}" style="left:${l.x}%;top:${l.y}%;width:${l.width}%;height:${l.height}%;${S.sel === i.n ? '' : 'opacity:.35'}"></div><button class="mk ${i.severity}" style="left:${l.x}%;top:${l.y}%" data-act="sel" data-n="${i.n}" aria-label="Change ${i.n}: ${esc(i.title)}">${i.n}</button>`; }).join('') : '';
   const changeRows = ch.map((i) => `<div class="issue ${i.severity} ${S.sel === i.n ? 'sel' : ''}" id="i${i.n}" data-act="sel" data-n="${i.n}"><div class="issue-top"><span class="sev-dot"></span><h3>${i.n}. ${esc(i.title)}</h3><span class="cat">${esc(i.area)}</span><span class="pill">${sevLabel[i.severity]}</span></div>${i.action ? `<div class="fix-strip"><span class="fix-label">✦ Fix</span><span>${esc(i.action)}</span></div>` : ''}</div>`).join('');
@@ -396,7 +396,7 @@ function websiteView() {
   <div class="summary-header"><div class="big" style="color:${sc}">${r.overall.score}</div><div><div class="mut small">Overall Score</div><div style="font-weight:600;color:${sc}">${scoreLabel(r.overall.score)} · <span class="badge">${esc(r.site_url || 'Website')}</span></div></div></div>
   <p style="margin:10px 0 0">${esc(r.overall.summary)}</p>
 
-  <div class="a-sec"><h3>📊 Website Scores</h3><div class="scores">${dims.map(([k, label]) => { const s = r.scores?.[k] ?? 0; return `<div class="sc"><b style="color:${scoreColor(s)}">${s}</b><span class="small mut">${label}</span></div>`; }).join('')}</div></div>
+  <div class="a-sec"><h3>📊 UI/UX Scores</h3><div class="scores">${dims.map(([k, label]) => { const s = r.scores?.[k] ?? 0; return `<div class="sc"><b style="color:${scoreColor(s)}">${s}</b><span class="small mut">${label}</span></div>`; }).join('')}</div></div>
 
   <div class="a-sec"><h3>✅ Works</h3><ul class="clean">${workRows}</ul></div>
 
