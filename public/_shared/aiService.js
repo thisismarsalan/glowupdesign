@@ -419,6 +419,35 @@ function normalizeWeb(raw) {
   };
 }
 
+// A failed capture often comes back as a VALID PNG that is just a blank/white canvas.
+// Detect it cheaply: inflate the raw scanline data and measure byte uniformity —
+// a uniform image compresses to (almost) a single byte value, a real rendered page never does.
+function pngLooksBlank(buf) {
+  try {
+    if (!buf || buf[0] !== 0x89 || buf[1] !== 0x50) return false;
+    let off = 8, idat = [], w = 0, h = 0;
+    while (off + 12 <= buf.length) {
+      const len = buf.readUInt32BE(off);
+      const type = buf.toString('ascii', off + 4, off + 8);
+      if (off + 8 + len > buf.length) break;
+      if (type === 'IHDR') { w = buf.readUInt32BE(off + 8); h = buf.readUInt32BE(off + 12); }
+      else if (type === 'IDAT') idat.push(buf.subarray(off + 8, off + 8 + len));
+      off += 12 + len;
+      if (type === 'IEND') break;
+    }
+    if (!idat.length || !w || !h || w * h < 10000) return false;
+    const raw = require('zlib').inflateSync(Buffer.concat(idat));
+    if (!raw || raw.length < w * h) return false;
+    const counts = new Array(256).fill(0);
+    const step = Math.max(1, Math.floor(raw.length / 250000)); // sample ~250k bytes max
+    let total = 0;
+    for (let i = 0; i < raw.length; i += step) { counts[raw[i]]++; total++; }
+    const top = Math.max(...counts) / total;
+    const flat = (counts[0] + counts[255]) / total; // mixed all-None/all-Sub encodings of a uniform page
+    return top >= 0.95 || flat >= 0.985;
+  } catch { return false; }
+}
+
 // Auto-capture a screenshot of the live site (thum.io primary, microlink fallback). Never throws — returns null on failure.
 async function captureScreenshot(rawUrl) {
   const target = /^https?:\/\//i.test(rawUrl) ? rawUrl : 'https://' + rawUrl;
@@ -436,7 +465,8 @@ async function captureScreenshot(rawUrl) {
       const buf = Buffer.from(await r.arrayBuffer());
       const isJpg = buf[0] === 0xff && buf[1] === 0xd8;
       const isPng = buf[0] === 0x89 && buf[1] === 0x50;
-      if ((!isJpg && !isPng) || buf.length < 5000 || buf.length > 8 * 1024 * 1024) continue;
+      if ((!isJpg && !isPng) || buf.length < 30000 || buf.length > 8 * 1024 * 1024) continue; // real 1280px page shots are never tiny; blank/error frames are
+      if (isPng && pngLooksBlank(buf)) continue; // provider returned a blank canvas — treat as failure, try the next provider
       return { mime: isJpg ? 'image/jpeg' : 'image/png', data: buf.toString('base64') };
     } catch { clearTimeout(to); }
   }
