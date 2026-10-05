@@ -332,7 +332,8 @@ RULES:
 - works 2-5 items. changes 0-4 items — fewer is better, ZERO is a valid and good answer ("changes": []).
 - IMPACT BAR — every change must pass this test: "Would fixing this meaningfully improve how real visitors experience the site — clarity, trust, ease of use or conversion?" If not, leave it out. A senior designer only bothers the client about things that matter.
 - NO nitpicks. Skip tiny padding tweaks, micro-alignments, mild color nudges, minor polish and personal taste. "Add a little breathing room" type pedantry does NOT belong in Changes Required. Do not invent problems to fill the list.
-- If the page is strong, say so in the summary and list 0-1 changes. Praise beats padding.
+- Style variety ACROSS sections (different button styles, link treatments or accents per section) is deliberate on professional sites — NOT a change. Flag consistency only when two competing actions sit side by side in the SAME section and it is unclear which one to click.
+- If the page is strong, say so in the summary and list 0-1 changes. Praise beats padding — a genuinely polished, world-class page earns 0 changes.
 - Content MISTAKES only (typos in real copy, broken sentences, placeholder text) go in area "content". Ignore any technical artifacts (code, script text) — you review the visible design a visitor sees, never the code behind it.
 - severity: critical ONLY when it blocks the page's main goal (visitor cannot understand the offer, cannot find or trust the main action). "Important" = clearly hurts the experience. Everything else does not make the list.
 - location: percentages of the SCREENSHOT (x,y = top-left), only when highly confident. Content-only issues or no screenshot → null.
